@@ -1,0 +1,11 @@
+control
+controlSBML
+jupyerlab
+lmfit
+matplotlib
+numpy
+pandas
+nose2
+seaborn
+sympy
+tellurium
