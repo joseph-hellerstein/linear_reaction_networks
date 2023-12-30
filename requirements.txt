@@ -1,6 +1,6 @@
 control
 controlSBML
-jupyerlab
+jupyterlab
 lmfit
 matplotlib
 numpy
