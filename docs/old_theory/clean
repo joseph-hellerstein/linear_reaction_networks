@@ -1,0 +1,5 @@
+#!/bin/bash
+for e in aux out bbl pdf blg log
+do
+mv *.$e /tmp
+done
