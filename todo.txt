@@ -1,0 +1,5 @@
+1. Create NetworkCreator.
+  a. Constructs two specices basic network (2SBN)
+  b. Performs operations: concatenate, forkjoin, loop, amplify
+  c. Generates Antimony model and constructs transfer function
+  d. Builds on AntimonyBuilder

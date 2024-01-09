@@ -3,8 +3,10 @@ controlSBML
 jupyterlab
 lmfit
 matplotlib
+mypy
 numpy
 pandas
+pandas-stubs
 nose2
 seaborn
 sympy
