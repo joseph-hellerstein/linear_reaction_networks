@@ -1,6 +1,5 @@
-from netapprox import siso_network_builder as snb # type: ignore
+from netapprox.siso_network import SISONetwork
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import re
@@ -10,8 +9,8 @@ import tellurium as te # type: ignore
 
 IGNORE_TEST = False
 IS_PLOT = False
-MODEL_NAME = "main_model"
-INCOMPLETE_LINEAR_MDL = """
+LINEAR_MDL = """
+model() *main_model
 S1 -> S2; k1*S1
 J1: S2 -> S3; k2*S2
 J2: S3 -> S2; k3*S3
@@ -24,14 +23,14 @@ k4 = 4
 S1 = 10
 S2 = 0
 S3 = 0
+end
 """
-LINEAR_MDL = "model *%s()\n" % MODEL_NAME + INCOMPLETE_LINEAR_MDL + "end"
 
 
 #############################
 # Tests
 #############################
-class TestAntimonyBuilder(unittest.TestCase):
+class TestSISONetwork(unittest.TestCase):
 
     def setUp(self):
         if IGNORE_TEST:
