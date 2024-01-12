@@ -1,4 +1,4 @@
-from netapprox.siso_network import SISONetwork
+from netapprox.siso_network import SISONetwork # type: ignore
 
 import numpy as np
 import pandas as pd

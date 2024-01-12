@@ -90,13 +90,18 @@ class SISOAntimonyBuilder(object):
     def __repr__(self):
         return "\n".join([str(o) for o in self.antimony_strs])
 
-    def addStatement(self, statement):
+    def addStatement(self, statement:str, is_after_end: Optional[bool]=False):
         """
         Args:
             statement: str
+
         """
-        self.antimony_strs.insert(self.end_pos, statement)
-        self.end_pos += 1
+        if is_after_end:
+            end_pos = len(self.antimony_strs)
+            self.antimony_strs.insert(end_pos, statement)
+        else:
+            self.antimony_strs.insert(self.end_pos, statement)
+            self.end_pos += 1
 
     def makeComment(self, comment):
         """
@@ -110,13 +115,25 @@ class SISOAntimonyBuilder(object):
         Args:
             other: SISOAntimonyBuilder
         """
-        full_comment = "//VVVVVVVVV %s VVVVVVVVV" % comment
-        self.makeComment(full_comment)
-        full_comment = "//^^^^^^^^^^^^^^^"
-        self.makeComment(full_comment)
+        def makeBeginMarker(is_after_end=False):
+            text = ""
+            self.addStatement(text, is_after_end=is_after_end)
+            text = "// VVVVVVVVV %s VVVVVVVVV" % comment
+            self.addStatement(text, is_after_end=is_after_end)
+        def makeEndMarker(is_after_end=False):
+            text = "// ^^^^^^^^^^^^^^^"
+            self.addStatement(text, is_after_end=is_after_end)
+            text = ""
+            self.addStatement(text, is_after_end=is_after_end)
+        makeBeginMarker()
         # Add the other model
         for pos in range(other.start_pos+1, other.end_pos-1):
             self.addStatement(other.antimony_strs[pos])
+        makeEndMarker()
         # Add anything that follows the model definition
-        for pos in range(other.end_pos, len(other.antimony_strs)):
-            self.addStatement(other.antimony_strs[pos])
+        end_pos = other.end_pos + 1
+        if end_pos < len(other.antimony_strs):
+            makeBeginMarker(is_after_end=True)
+            for pos in range(other.end_pos + 1, len(other.antimony_strs)):
+                self.addStatement(other.antimony_strs[pos], is_after_end=True)
+            makeEndMarker(is_after_end=True)
