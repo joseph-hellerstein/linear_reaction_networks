@@ -45,7 +45,7 @@ end
 class TestSISONetworkBuilder(unittest.TestCase):
 
     def setUp(self):
-        self.builder = snb.SISOAntimonyBuilder(LINEAR_MDL)
+        self.builder = snb.SISOAntimony(LINEAR_MDL)
 
     def check(self, builder=None):
         if builder is None:
@@ -77,10 +77,10 @@ class TestSISONetworkBuilder(unittest.TestCase):
         self.assertTrue(builder == self.builder)
 
     def testAppendModel(self):
-        #if IGNORE_TEST:
-        #    return
+        if IGNORE_TEST:
+            return
         df1 = util.mat2DF(self.check())
-        builder = snb.SISOAntimonyBuilder(TWO_SPECIES_MDL)
+        builder = snb.SISOAntimony(TWO_SPECIES_MDL)
         df2 = util.mat2DF(self.check(builder=builder))
         df_full = df1.merge(df2)
         current_len = len(builder.antimony_strs)
