@@ -5,7 +5,8 @@ Usage:
   net = SISONetwork.makeTwoSpeciesNetwork("S1", "S2", 1, 1)
 
 """
-from netapprox.siso_antimony import AntimonyTemplate
+from netapprox.antimony_template import AntimonyTemplate
+from netapprox import constants as cn
 
 import control  # type: ignore
 import controlSBML as ctl # type: ignore
@@ -42,7 +43,7 @@ class SISONetwork(object):
         self.output_name = output_name
         self.model_reference = model_reference
         self.ctlsb = ctl.ControlSBML(self.model_reference, input_names=[self.input_name], output_names=[self.output_name])
-        self.antimony = AntimonyTemplate(self.ctlsb.getAntimony())
+        self.template = AntimonyTemplate(self.ctlsb.getAntimony()) . # type: ignore
         self.kI = kI
         self.kO = kO
         self.transfer_function_generator = transfer_function_generator
@@ -70,7 +71,7 @@ class SISONetwork(object):
             return old_name, new_name
         #
         if model_name is None:
-            model_name = self.antimony.main_model_name
+            model_name = self.template.main_model_name
         antimony_str = self.getAntimony(model_name=model_name, is_main=is_main)
         # Substitute the template names
         for idx, child in enumerate(self.children):
@@ -112,16 +113,44 @@ class SISONetwork(object):
             kO: Rate which output is cconsumed
         """
         model = """
-        model *main_model()
+        model %s()
         SI -> SO; kIO*SI
         SO -> ; kO*SO
         kI = 1
         kO = 1
         end
-        """
+        """ % cn.TE_MODEL_NAME
         def transfer_function(**kwargs):
             return control.TransferFunction([kwargs["kO"]], [1, kwargs["kI"]])
         return cls("SI", "SO", model, "kI", "kO", transfer_function)
+    
+    @classmethod
+    def makeSequentialNetwork(cls, kIs:List[float], kOs:[float],
+                              operating_region=DEFAULT_OPERATION_REGION)->"SISONetwork":
+        """
+        Creates a sequential network of length len(kIs) = len(kOs). kI = kIs[0]; kO = kOs[-1].
+        Args:
+            input_name: input species to the network
+            output_name: output species from the network
+            model_reference: reference in a form that can be read by Tellurium
+            kIs: Rates at which input is consumed 
+            kOs: Rates which output is consumed
+        """
+        if len(kIs) != len(kOs):
+            raise ValueError("kIs and kOs must be the same length")
+        model = """
+            SI_%d -> S%d; kIO_%d*SI_%d
+            SO_%d -> ; kO_%d*SO_%d
+            kI_%d = %f 
+            kO_%d = %f
+
+            """
+        def makeStage(idx:int)->str:
+            return model % (idx, idx, idx, idx, idx, idx, idx, idx, kIs[idx], idx, kOs[idx])
+        antimony_str = "\n".join([makeStage(n) for n in range(len(kIs))])
+        def transfer_function(**kwargs):
+            return control.TransferFunction([kwargs["kO"]], [1, kwargs["kI"]])
+        return cls("SI", "SO", antimony_str, kIs[0], kOs[-1], transfer_function)
     
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
