@@ -5,7 +5,7 @@ Usage:
   net = SISONetwork.makeTwoSpeciesNetwork("S1", "S2", 1, 1)
 
 """
-from netapprox.siso_antimony import SISOAntimony
+from netapprox.siso_antimony import AntimonyTemplate
 
 import control  # type: ignore
 import controlSBML as ctl # type: ignore
@@ -42,7 +42,7 @@ class SISONetwork(object):
         self.output_name = output_name
         self.model_reference = model_reference
         self.ctlsb = ctl.ControlSBML(self.model_reference, input_names=[self.input_name], output_names=[self.output_name])
-        self.antimony = SISOAntimony(self.ctlsb.getAntimony())
+        self.antimony = AntimonyTemplate(self.ctlsb.getAntimony())
         self.kI = kI
         self.kO = kO
         self.transfer_function_generator = transfer_function_generator
@@ -112,7 +112,7 @@ class SISONetwork(object):
             kO: Rate which output is cconsumed
         """
         model = """
-        model main_model()
+        model *main_model()
         SI -> SO; kIO*SI
         SO -> ; kO*SO
         kI = 1
