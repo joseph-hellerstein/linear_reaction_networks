@@ -7,7 +7,7 @@ T = TypeVar('T')
 class SISONetwork(Generic[T]):
 
     def __init__(self, input_name:str, output_name:str, model_reference:str, kI:float, kO:float,
-                            transfer_function:control.TransferFunction, operating_region: Any) -> None: ...
+                            transfer_function:control.TransferFunction, operating_region: List[float]) -> None: ...
 
     def plotStaircaseResponse(self, initial_value:Optional[float]=...,
                             final_value:Optional[float]=..., num_step:Optional[float]=...,

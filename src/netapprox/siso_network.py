@@ -7,6 +7,7 @@ Usage:
 """
 from netapprox.antimony_template import AntimonyTemplate
 from netapprox import constants as cn
+from netapprox import util
 
 import control  # type: ignore
 import controlSBML as ctl # type: ignore
@@ -16,8 +17,9 @@ import tellurium as te # type: ignore
 from typing import List, Optional
 
 
-DEFAULT_OPERATION_REGION = np.linspace(0, 10, 5)
-DEFAULT_TIMES = np.linspace(0, 10, 1000)
+DEFAULT_OPERATION_REGION = list(np.linspace(0, 10, 5))
+DEFAULT_TIMES = list(np.linspace(0, 10, 1000))
+MAIN_MODEL_NAME = "main_model"
 
 
 class SISONetwork(object):
@@ -25,62 +27,73 @@ class SISONetwork(object):
     Representation of a SISO reaction network.
     """
 
-    def __init__(self, input_name:str, output_name:str, model_reference:str, kI:str, kO:str,
-                 transfer_function_generator:function, operating_region=DEFAULT_OPERATION_REGION,
-                 transfer_function_parameters:Optional[List[str]]=None,
-                 children:Optional[List["SISONetwork"]]=None):
+    def __init__(self, antimony_str:str, input_name:str, output_name:str, kI:float, kO:float,
+                 transfer_function:control.TransferFunction, operating_region: List[float]=DEFAULT_OPERATION_REGION,
+                 children:Optional[List["SISONetwork"]]=None, times:List[float]=DEFAULT_TIMES):
         """
         Args:
             input_name: input species to the network
             output_name: output species from the network
-            model_reference: reference in a form that can be read by Tellurium
-            kI: parameter in roadrunner model for rate at which input is consumed
-            kO: parameter in roadrunner model for rate at which output is consumed
-            transfer_function_generator: Function(**kwargs) -> control.TransferFunction
+            antimony_str: Antimony string, possibly with template variables
+            kI: rate at which the input is consumed
+            kO: rate at which the output is consumed
+            transfer_function: transfer function for the network
             children: List of SiSONetworks from which this network is constructed
+            times: times at which to simulate the network
         """
         self.input_name = input_name
         self.output_name = output_name
-        self.model_reference = model_reference
-        self.ctlsb = ctl.ControlSBML(self.model_reference, input_names=[self.input_name], output_names=[self.output_name])
-        self.template = AntimonyTemplate(self.ctlsb.getAntimony()) . # type: ignore
+        self.template: AntimonyTemplate = AntimonyTemplate(antimony_str)
         self.kI = kI
         self.kO = kO
-        self.transfer_function_generator = transfer_function_generator
-        if transfer_function_parameters is None:
-            transfer_function_parameters = []
-        self.transfer_function_parameters = transfer_function_parameters
         self.operating_region = operating_region
+        self.transfer_function = transfer_function
         if children is None:
             children = []
         self.children = children
+        self.times = times
 
-    def getAntimony(self, model_name: Optional[str]=None, is_main:bool=False)->str:
+    def makeSubmodelName(self, parent_model_name:str, idx:int)->str:
         """
-        Recursively expands the mondel. Replaces template names of the form <child_n> with a name appropriate for the
-        expansion.
         Args:
-            model_name: name of the model to return
-            is_main: if True, returns the main model
+            parent_model_name: name of the parent model
+            idx: index of the child
+        Returns:
+            str: name of the child
+        """
+        return  "%s_%d" % (parent_model_name, idx)
+
+    def getAntimony(self, model_name: Optional[str]=None)->str:
+        """
+        Recursively expands the model. Replaces template names of the form <child_n> with a name appropriate for the
+        expansion. If model_name is None, then it is assumed to be the main model.
+        Args:
+            model_name: name of the main model
         Returns:
             str
         """
-        def makeChildNames(idx):
-            old_name = "<child_%d>" % idx
-            new_name = "%s_%d" % (model_name, idx)
-            return old_name, new_name
+        self.template.initialize()
+        def makeNames(idx):
+            template_name = self.template.sub_model_name(idx)
+            submodel_name = self.makeSubmodelName(model_name, idx)
+            return template_name, submodel_name
         #
         if model_name is None:
-            model_name = self.template.main_model_name
-        antimony_str = self.getAntimony(model_name=model_name, is_main=is_main)
+            model_name = MAIN_MODEL_NAME
+        if model_name == MAIN_MODEL_NAME:
+            substitute_name = "*%s" % model_name
+        else:
+            substitute_name = model_name
+        self.template.setTemplateVariable(cn.TE_MODEL_NAME, substitute_name)
         # Substitute the template names
         for idx, child in enumerate(self.children):
-            old_name, new_name = makeChildNames(idx)
-            antimony_str = antimony_str.replace(old_name, new_name)
+            template_name, submodel_name = makeNames(idx)
+            self.template.setTemplateVariable(template_name, submodel_name)
+        antimony_str:str = self.template.substituted_antimony  # type: ignore
         # Recursively replace other antimony
         for child in self.children:
-            _, new_name = makeChildNames(idx)
-            antimony_str += child.getAntimony(model_name=new_name, is_main=False)
+            _, model_name = makeNames(idx)
+            antimony_str += "\n" + child.getAntimony(model_name=model_name)
         return antimony_str
 
     def plotStaircaseResponse(self, initial_value:Optional[float]=None,
@@ -99,11 +112,27 @@ class SISONetwork(object):
             final_value = self.operating_region[-1]
         if num_step is None:
             num_step = len(self.operating_region)
-        self.ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step, **kwargs)
+        ctlsb = ctl.ControlSBML(self.getAntimony(), input_names=[self.input_name], output_names=[self.output_name],
+                                is_fixed_input_species=True)
+        ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step, **kwargs)
+
+    def simulate(self, **kwargs)->pd.DataFrame:
+        """
+        Returns:
+            pd.DataFrame
+                Columns: "time", self.input_name, self.output_name
+        """
+        rr = te.loada(self.getAntimony())
+        for key, value in kwargs.items():
+            setattr(rr, key, value)
+        data_arr = rr.simulate(self.times[0], self.times[-1], len(self.times),
+                               selections=[cn.TIME, self.input_name, self.output_name])
+        df = util.mat2DF(data_arr)
+        df = df[[cn.TIME, self.input_name, self.output_name]]
+        return df
 
     @classmethod
-    def makeTwoSpeciesNetwork(cls, kI:float, kO:float,
-                              operating_region=DEFAULT_OPERATION_REGION)->"SISONetwork":
+    def makeTwoSpeciesNetwork(cls, kI:float, kO:float, **kwargs)->"SISONetwork":
         """
         Args:
             input_name: input species to the network
@@ -111,21 +140,24 @@ class SISONetwork(object):
             model_reference: reference in a form that can be read by Tellurium
             kI: Rate at which input is consumed 
             kO: Rate which output is cconsumed
+            kwargs: additional arguments for constructor
         """
         model = """
         model %s()
         SI -> SO; kIO*SI
         SO -> ; kO*SO
-        kI = 1
-        kO = 1
+        kIO = %f
+        kO = %f
+        SI = 0
+        SO = 0
         end
-        """ % cn.TE_MODEL_NAME
+        """ % (cn.TE_MODEL_NAME, kI, kO)
         def transfer_function(**kwargs):
             return control.TransferFunction([kwargs["kO"]], [1, kwargs["kI"]])
-        return cls("SI", "SO", model, "kI", "kO", transfer_function)
+        return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
     
     @classmethod
-    def makeSequentialNetwork(cls, kIs:List[float], kOs:[float],
+    def makeSequentialNetwork(cls, kIOs:List[float], kOs:[float],
                               operating_region=DEFAULT_OPERATION_REGION)->"SISONetwork":
         """
         Creates a sequential network of length len(kIs) = len(kOs). kI = kIs[0]; kO = kOs[-1].
@@ -133,24 +165,25 @@ class SISONetwork(object):
             input_name: input species to the network
             output_name: output species from the network
             model_reference: reference in a form that can be read by Tellurium
-            kIs: Rates at which input is consumed 
+            kIOs: Rates at which input is consumed 
             kOs: Rates which output is consumed
         """
-        if len(kIs) != len(kOs):
+        if len(kIOs) != len(kOs):
             raise ValueError("kIs and kOs must be the same length")
         model = """
             SI_%d -> S%d; kIO_%d*SI_%d
             SO_%d -> ; kO_%d*SO_%d
-            kI_%d = %f 
+            kOI_%d = %f 
             kO_%d = %f
 
             """
         def makeStage(idx:int)->str:
-            return model % (idx, idx, idx, idx, idx, idx, idx, idx, kIs[idx], idx, kOs[idx])
-        antimony_str = "\n".join([makeStage(n) for n in range(len(kIs))])
-        def transfer_function(**kwargs):
-            return control.TransferFunction([kwargs["kO"]], [1, kwargs["kI"]])
-        return cls("SI", "SO", antimony_str, kIs[0], kOs[-1], transfer_function)
+            return model % (idx, idx, idx, idx, idx, idx, idx, idx, kIOs[idx], idx, kOs[idx])
+        antimony_str = "\n".join([makeStage(n) for n in range(len(kIOs))])
+        tf1 = control.TransferFunction([kIOs[0]], [1, kIOs[0]])
+        tfs = np.prod([control.TransferFunction([kOs[n]], [1, kIOs[n] + kOs[n], kIOs[n]*kOs[n]]) for n in range(2, len(kIOs))])
+        transfer_function = tf1*tfs
+        return cls("SI", "SO", antimony_str, kIOs[0], kOs[-1], transfer_function)
     
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
@@ -165,7 +198,7 @@ class SISONetwork(object):
         """
         raise NotImplementedError("Must implement")
     
-    def concatenate(self, other:"SISONetwork")->"SISONetwork":
+    def sequence(self, other:"SISONetwork")->"SISONetwork":
         """
         Creates a new network that is the concatenation of this network and another.
         Args:

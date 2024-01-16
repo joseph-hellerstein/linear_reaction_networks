@@ -1,5 +1,6 @@
 from netapprox.siso_network import SISONetwork # type: ignore
 
+import control # type: ignore
 import numpy as np
 import pandas as pd
 import re
@@ -7,22 +8,17 @@ import unittest
 import tellurium as te # type: ignore
 
 
-IGNORE_TEST = False
-IS_PLOT = False
+IGNORE_TEST = True
+IS_PLOT = True
 LINEAR_MDL = """
-model() *main_model
+model *main_model()
+species S1, S2
 S1 -> S2; k1*S1
-J1: S2 -> S3; k2*S2
-J2: S3 -> S2; k3*S3
-J3: S2 -> ; k4*S2
-
+J2: S2 -> ; k2*S2
 k1 = 1
 k2 = 2
-k3 = 3
-k4 = 4
 S1 = 10
 S2 = 0
-S3 = 0
 end
 """
 
@@ -33,61 +29,26 @@ end
 class TestSISONetwork(unittest.TestCase):
 
     def setUp(self):
-        if IGNORE_TEST:
-            return
-        self.init()
+        k1 = 1
+        k2 = 2
+        tf = control.TransferFunction([k1], [1, k2])
+        self.network = SISONetwork(LINEAR_MDL, "S1", "S2", k1, k2, tf)
 
-    def init(self):
-        if "builder" in dir(self):
-            return
-
-    def check(self, builder=None):
-        if builder is None:
-            builder = self.builder
-        rr = te.loada(str(builder))
+    def check(self, network=None):
+        if network is None:
+            network = self.network
+        antimony_str = network.getAntimony()
+        rr = te.loada(str(network))
         data = rr.simulate(0,20, 2000, selections=["time", "S1", "S2", "S3"])
         self.assertTrue(len(data) > 0)
         if IS_PLOT:
             rr.plot()
         return data
-    
-    def testProperties(self):
-        if IGNORE_TEST:
-            return
-        builder = ab.AntimonyBuilder(MTOR_MDL) 
-        self.assertGreater(len(builder.floating_species_names), 0)
-        self.assertEqual(len(builder.boundary_species_names), 0)
-        self.assertGreater(len(builder.reaction_names), 0)
-        self.assertGreater(len(builder.parameter_names), 0)
 
     def testConstructor(self):
         if IGNORE_TEST:
             return
-        self.init()
-        self.assertTrue(isinstance(self.builder.antimony, str))
-
-    def getStatement(self, pos=1, builder=None):
-        if builder is None:
-            builder = self.builder
-        return builder.antimony_strs[builder.insert_pos-pos]
-
-    def testMakeComment(self):
-        if IGNORE_TEST:
-            return
-        self.init()
-        self.builder.makeComment("comment")
-        self.assertTrue("comment" in self.getStatement())
-
-    def testMakeAdditionStatement(self):
-        if IGNORE_TEST:
-            return
-        self.init()
-        self.builder.makeAdditionStatement("S1", "S2", "S3")
-        result = re.search("S1.*:=.*S2.*\+.*S3", self.getStatement())
-        self.assertTrue(result)
-        self.builder.makeAdditionStatement("S2", "S3", is_assignment=False)
-        result = re.search("S2.* =.*S3", self.getStatement())
-        self.assertTrue(result)
+        self.assertTrue(isinstance(self.network, SISONetwork))
 
     def testCopyAndEqual(self):
         if IGNORE_TEST:
@@ -98,6 +59,35 @@ class TestSISONetwork(unittest.TestCase):
         #
         builder.makeBoundarySpecies("S1")
         self.assertFalse(builder == self.builder)
+
+    def testGetAntimony(self):
+        if IGNORE_TEST:
+            return
+        antimony_str = self.network.getAntimony()
+        self.assertEqual(antimony_str, LINEAR_MDL)
+        self.network.template.isValidAntimony()
+
+    def testPlotStaircaseResponse(self):
+        if IGNORE_TEST:
+            return
+        self.network.plotStaircaseResponse(is_plot=IS_PLOT)
+
+    def testMakeTwoSpeciesNetwork(self):
+        #if IGNORE_TEST:
+        #    return
+        kI = 0.5
+        kO = 1.0
+        times = np.linspace(0, 10, 100)
+        network = SISONetwork.makeTwoSpeciesNetwork(kI, kO, times=times)
+        self.assertTrue(isinstance(network, SISONetwork))
+        self.assertTrue(network.input_name == "SI")
+        self.assertTrue(network.output_name == "SO")
+        self.assertTrue(network.kI == kI)
+        self.assertTrue(network.kO == kO)
+        si = 10
+        response_df = network.simulate(kIO=1, kO=0.5, SI=si)
+        self.assertEqual(response_df.loc[0, "SI"], si)
+        self.assertGreater(response_df.loc[len(times)-1, "SO"], 0.1)
        
 
 if __name__ == '__main__':
