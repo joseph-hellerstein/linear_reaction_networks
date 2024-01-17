@@ -44,12 +44,11 @@ class AntimonyTemplate():
         if len(model_name) == 0:
             self.makeModularModel()
             model_name = DEFAULT_MODEL_NAME
-            substituted_antimony = substituted_antimony.replace(model_name, cn.TE_MODEL_NAME)
         else:
             new_model_name = "*%s" % model_name
             substituted_antimony = substituted_antimony.replace(new_model_name, cn.TE_MODEL_NAME)
+            self.substituted_antimony = substituted_antimony
         self.model_name = model_name
-        self.substituted_antimony = substituted_antimony
 
     def _extractModelName(self, line: str)->str:
         # Extracts the name of the model from the line

@@ -11,6 +11,7 @@ from netapprox import util
 
 import control  # type: ignore
 import controlSBML as ctl # type: ignore
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tellurium as te # type: ignore
@@ -41,17 +42,39 @@ class SISONetwork(object):
             children: List of SiSONetworks from which this network is constructed
             times: times at which to simulate the network
         """
+        self.template: AntimonyTemplate = AntimonyTemplate(antimony_str)
         self.input_name = input_name
         self.output_name = output_name
-        self.template: AntimonyTemplate = AntimonyTemplate(antimony_str)
         self.kI = kI
         self.kO = kO
-        self.operating_region = operating_region
         self.transfer_function = transfer_function
+        self.operating_region = operating_region
         if children is None:
             children = []
         self.children = children
         self.times = times
+
+    def __eq__(self, other)->bool:
+        """
+        Returns:
+            bool
+        """
+        if not isinstance(other, SISONetwork):
+            return False
+        return (self.template == other.template) and (self.input_name == other.input_name) and \
+               (self.output_name == other.output_name) and (self.kI == other.kI) and (self.kO == other.kO) and \
+               (self.transfer_function == other.transfer_function) and (self.operating_region == other.operating_region) and \
+               (self.children == other.children) and (self.times == other.times)
+
+    def copy(self)->"SISONetwork":
+        """
+        Returns:
+            SISONetwork
+        """
+        network = SISONetwork(self.template.original_antimony, self.input_name, self.output_name, self.kI, self.kO,  # type: ignore
+                           self.transfer_function, self.operating_region, self.children, self.times)
+        network.template = self.template.copy()
+        return network
 
     def makeSubmodelName(self, parent_model_name:str, idx:int)->str:
         """
@@ -74,7 +97,7 @@ class SISONetwork(object):
         """
         self.template.initialize()
         def makeNames(idx):
-            template_name = self.template.sub_model_name(idx)
+            template_name = self.template.makeSubmodelTemplateName(idx)
             submodel_name = self.makeSubmodelName(model_name, idx)
             return template_name, submodel_name
         #
@@ -87,24 +110,27 @@ class SISONetwork(object):
         self.template.setTemplateVariable(cn.TE_MODEL_NAME, substitute_name)
         # Substitute the template names
         for idx, child in enumerate(self.children):
-            template_name, submodel_name = makeNames(idx)
+            template_name, submodel_name = makeNames(idx+1)
             self.template.setTemplateVariable(template_name, submodel_name)
         antimony_str:str = self.template.substituted_antimony  # type: ignore
         # Recursively replace other antimony
-        for child in self.children:
-            _, model_name = makeNames(idx)
+        for idx, child in enumerate(self.children):
+            _, model_name = makeNames(idx+1)
             antimony_str += "\n" + child.getAntimony(model_name=model_name)
         return antimony_str
 
     def plotStaircaseResponse(self, initial_value:Optional[float]=None,
                               final_value:Optional[float]=None, num_step:Optional[float]=None,
-                              **kwargs):
+                              **kwargs)->tuple[ctl.Timeseries, ctl.AntimonyBuilder]:
         """
         Args:
             initial_value: initial value of the input
             final_value: final value of the input
             num_step: number of steps in the staircase
             kwargs: plot options
+        Returns:
+            tuple[ctl.Timeseries, ctl.AntimonyBuilder]
+            
         """
         if initial_value is None:
             initial_value = self.operating_region[0]
@@ -114,23 +140,71 @@ class SISONetwork(object):
             num_step = len(self.operating_region)
         ctlsb = ctl.ControlSBML(self.getAntimony(), input_names=[self.input_name], output_names=[self.output_name],
                                 is_fixed_input_species=True)
-        ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step, **kwargs)
-
-    def simulate(self, **kwargs)->pd.DataFrame:
+        result = ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step, **kwargs)
+        return result
+    
+    def plotTransferFunction(self, is_simulation:bool=True, is_transfer_function:bool=True,
+                             **kwargs)->ctl.Timeseries:
         """
+        Compares the transfer function output to the simulation output for a staircase input.
+        Args:
+            is_simulation: if True, then plot simulations
+            is_transfer_function: if True, then plot transfer function
+            kwargs: plot options
         Returns:
-            pd.DataFrame
-                Columns: "time", self.input_name, self.output_name
+            ctl.Timeseries
         """
-        rr = te.loada(self.getAntimony())
-        for key, value in kwargs.items():
-            setattr(rr, key, value)
-        data_arr = rr.simulate(self.times[0], self.times[-1], len(self.times),
-                               selections=[cn.TIME, self.input_name, self.output_name])
-        df = util.mat2DF(data_arr)
-        df = df[[cn.TIME, self.input_name, self.output_name]]
-        return df
+        if is_simulation and (not is_transfer_function):
+            is_this_plot = True
+        else:
+            is_this_plot = False
+        is_plot = kwargs["is_plot"]
+        kwargs["is_plot"] = False
+        timeseries, _ = self.plotStaircaseResponse(times=self.times, **kwargs)
+        plt.close()  # Don't show the staircase
+        if is_this_plot:
+            return timeseries
+        # Other plots
+        if is_transfer_function:
+            column_name = "%s_staircase" % self.input_name
+            uvals = timeseries[column_name].values
+            _, predictions = control.forced_response(self.transfer_function, T=self.times, U=uvals)
+        # Plots
+        _, ax = plt.subplots(1)
+        if is_simulation and is_transfer_function:
+            simulations = timeseries[self.output_name].values
+            ax.scatter(simulations, predictions, color="red", marker="*")
+            ax.set_xlabel("simulated")
+            ax.set_ylabel("predicted")
+            max_simulated = np.max(simulations)
+            max_predictions = np.max(predictions)
+            max_value = max(max_simulated, max_predictions)
+            ax.plot([0, max_value], [0, max_value], linestyle="--")
+        elif (not is_simulation) and is_transfer_function:
+            ax.scatter(self.times, predictions, marker="o")
+            ax.set_xlabel("time")
+            ax.set_ylabel("predictions")
+        else:
+            raise ValueError("Must specify is_simulation and/or is_transfer_function")
+        timeseries["predicted"] = predictions
+        if "title" in kwargs.keys():
+            title = kwargs["title"]
+        else:
+            title = ""
+        ax.set_title(title)
+        if is_plot:
+            plt.show()
+        else:
+            plt.close()
+        return timeseries
 
+
+        ctlsb = ctl.ControlSBML(self.getAntimony(), input_names=[self.input_name], output_names=[self.output_name],
+                                is_fixed_input_species=True)
+        result = ctlsb.plotTransferFunction(**kwargs)
+        return result
+    
+    ################# NETWORK CONSTRUCTION ###############
     @classmethod
     def makeTwoSpeciesNetwork(cls, kI:float, kO:float, **kwargs)->"SISONetwork":
         """
@@ -152,8 +226,7 @@ class SISONetwork(object):
         SO = 0
         end
         """ % (cn.TE_MODEL_NAME, kI, kO)
-        def transfer_function(**kwargs):
-            return control.TransferFunction([kwargs["kO"]], [1, kwargs["kI"]])
+        transfer_function = control.TransferFunction([kI], [1, kO])
         return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
     
     @classmethod
@@ -197,8 +270,9 @@ class SISONetwork(object):
             kOs: Rates which output is cconsumed
         """
         raise NotImplementedError("Must implement")
-    
-    def sequence(self, other:"SISONetwork")->"SISONetwork":
+
+    ################# NETWORK OPERATIONS ###############
+    def concatenate(self, other:"SISONetwork")->"SISONetwork":
         """
         Creates a new network that is the concatenation of this network and another.
         Args:
@@ -206,9 +280,23 @@ class SISONetwork(object):
         Returns:
             SISONetwork
         """
-        raise NotImplementedError("Must implement")
+        submodel1 = self.template.makeSubmodelTemplateName(1)
+        submodel2 = self.template.makeSubmodelTemplateName(2)
+        model = """
+            A: %s();
+            B: %s();
+            A.%s is B.%s;
+            SI is A.%s
+            SO is B.%s
+            """ % (submodel1, submodel2, self.output_name, other.input_name, self.input_name, other.output_name)
+        transfer_function = self.transfer_function*other.transfer_function*control.TransferFunction(
+            [1, self.kO], [1, self.kO + other.kI])
+        network = SISONetwork(model, "SI", "SO", self.kI, other.kO, transfer_function,
+                              operating_region=self.operating_region, times=self.times,
+                              children=[self, other])
+        return network
     
-    def forkjoin(self, other:"SISONetwork")->"SISONetwork":
+    def branchjoin(self, other:"SISONetwork")->"SISONetwork":
         """
         Creates a new network by combining this network and another in parallel.
         Args:

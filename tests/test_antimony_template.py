@@ -34,6 +34,20 @@ S2 = 0
 S3 = 0
 end
 """ % MODEL_NAME
+BARE_MDL = """
+S1 -> S2; k1*S1
+J1: S2 -> S3; k2*S2
+J2: S3 -> S2; k3*S3
+J3: S2 -> ; k4*S2
+
+k1 = 1
+k2 = 2
+k3 = 3
+k4 = 4
+S1 = 10
+S2 = 0
+S3 = 0
+"""
 
 
 #############################
@@ -60,6 +74,10 @@ class TestSISONetworkBuilder(unittest.TestCase):
             return
         self.assertTrue(isinstance(self.template.substituted_antimony, str))
         self.assertEqual(self.template.model_name, MODEL_NAME)
+        #
+        template = AntimonyTemplate(BARE_MDL)
+        template.setTemplateVariable(cn.TE_MODEL_NAME, MODEL_NAME)
+        self.assertTrue(template.isValidAntimony())
 
     def testCopyAndEqual(self):
         if IGNORE_TEST:

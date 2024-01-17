@@ -1,6 +1,7 @@
 from netapprox.siso_network import SISONetwork # type: ignore
 
 import control # type: ignore
+import controlSBML as ctl # type: ignore
 import numpy as np
 import pandas as pd
 import re
@@ -29,6 +30,11 @@ end
 class TestSISONetwork(unittest.TestCase):
 
     def setUp(self):
+        if IGNORE_TEST:
+            return
+        self.init()
+
+    def init(self):
         k1 = 1
         k2 = 2
         tf = control.TransferFunction([k1], [1, k2])
@@ -53,12 +59,8 @@ class TestSISONetwork(unittest.TestCase):
     def testCopyAndEqual(self):
         if IGNORE_TEST:
             return
-        self.init()
-        builder = self.builder.copy()
-        self.assertTrue(builder == self.builder)
-        #
-        builder.makeBoundarySpecies("S1")
-        self.assertFalse(builder == self.builder)
+        network = self.network.copy()
+        self.assertTrue(network == self.network)
 
     def testGetAntimony(self):
         if IGNORE_TEST:
@@ -73,11 +75,11 @@ class TestSISONetwork(unittest.TestCase):
         self.network.plotStaircaseResponse(is_plot=IS_PLOT)
 
     def testMakeTwoSpeciesNetwork(self):
-        #if IGNORE_TEST:
-        #    return
+        if IGNORE_TEST:
+            return
         kI = 0.5
         kO = 1.0
-        times = np.linspace(0, 10, 100)
+        times = np.linspace(0, 30, 300)
         network = SISONetwork.makeTwoSpeciesNetwork(kI, kO, times=times)
         self.assertTrue(isinstance(network, SISONetwork))
         self.assertTrue(network.input_name == "SI")
@@ -85,9 +87,31 @@ class TestSISONetwork(unittest.TestCase):
         self.assertTrue(network.kI == kI)
         self.assertTrue(network.kO == kO)
         si = 10
-        response_df = network.simulate(kIO=1, kO=0.5, SI=si)
-        self.assertEqual(response_df.loc[0, "SI"], si)
-        self.assertGreater(response_df.loc[len(times)-1, "SO"], 0.1)
+        response_ts, _ = network.plotStaircaseResponse(is_plot=IS_PLOT, times=times)
+        indices = list(response_ts.index)
+        end_index = indices[-1]
+        so = network.transfer_function.dcgain()*si
+        self.assertTrue(np.isclose(response_ts.loc[end_index, "SI_staircase"], si))
+        self.assertGreaterEqual(so, response_ts.loc[end_index, "SO"])
+
+    def testPlotTransferFunction(self):
+        if IGNORE_TEST:
+            return
+        timeseries = self.network.plotTransferFunction(is_plot=IS_PLOT)
+        self.assertTrue(isinstance(timeseries, ctl.Timeseries))
+        timeseries = self.network.plotTransferFunction(is_simulation=False, is_plot=IS_PLOT)
+        self.assertTrue(isinstance(timeseries, ctl.Timeseries))
+
+    def testConcatenate(self):
+        #if IGNORE_TEST:
+        #    return
+        self.init()
+        network = self.network.copy()
+        cnetwork = self.network.concatenate(network)
+        self.assertTrue(cnetwork.input_name == "SI")
+        self.assertTrue(cnetwork.output_name == "SO")
+        self.assertTrue(cnetwork.template.isValidAntimony())
+        # Do simulations
        
 
 if __name__ == '__main__':
