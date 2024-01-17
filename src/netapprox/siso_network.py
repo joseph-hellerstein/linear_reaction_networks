@@ -21,6 +21,8 @@ from typing import List, Optional
 DEFAULT_OPERATION_REGION = list(np.linspace(0, 10, 5))
 DEFAULT_TIMES = list(np.linspace(0, 10, 1000))
 MAIN_MODEL_NAME = "main_model"
+PREDICTION = "prediction"
+SIMULATION = "simulation"
 
 
 class SISONetwork(object):
@@ -115,8 +117,8 @@ class SISONetwork(object):
         antimony_str:str = self.template.substituted_antimony  # type: ignore
         # Recursively replace other antimony
         for idx, child in enumerate(self.children):
-            _, model_name = makeNames(idx+1)
-            antimony_str += "\n" + child.getAntimony(model_name=model_name)
+            _, submodel_name = makeNames(idx+1)
+            antimony_str = child.getAntimony(model_name=submodel_name) + "\n" + antimony_str
         return antimony_str
 
     def plotStaircaseResponse(self, initial_value:Optional[float]=None,
@@ -152,7 +154,10 @@ class SISONetwork(object):
             is_transfer_function: if True, then plot transfer function
             kwargs: plot options
         Returns:
-            ctl.Timeseries
+            ctl.Timeseries: Columns
+                output_name: output from the network
+                SIMULATION: simulation output
+                PREDICTION: prediction from the transfer function
         """
         if is_simulation and (not is_transfer_function):
             is_this_plot = True
@@ -174,19 +179,20 @@ class SISONetwork(object):
         if is_simulation and is_transfer_function:
             simulations = timeseries[self.output_name].values
             ax.scatter(simulations, predictions, color="red", marker="*")
-            ax.set_xlabel("simulated")
-            ax.set_ylabel("predicted")
+            ax.set_xlabel(SIMULATION)
+            ax.set_ylabel(PREDICTION)
             max_simulated = np.max(simulations)
             max_predictions = np.max(predictions)
             max_value = max(max_simulated, max_predictions)
             ax.plot([0, max_value], [0, max_value], linestyle="--")
         elif (not is_simulation) and is_transfer_function:
             ax.scatter(self.times, predictions, marker="o")
-            ax.set_xlabel("time")
-            ax.set_ylabel("predictions")
+            ax.set_xlabel(cn.TIME)
+            ax.set_ylabel(PREDICTION)
         else:
             raise ValueError("Must specify is_simulation and/or is_transfer_function")
-        timeseries["predicted"] = predictions
+        timeseries[PREDICTION] = predictions
+        timeseries[SIMULATION] = timeseries[self.output_name]
         if "title" in kwargs.keys():
             title = kwargs["title"]
         else:
@@ -197,12 +203,26 @@ class SISONetwork(object):
         else:
             plt.close()
         return timeseries
-
-
-        ctlsb = ctl.ControlSBML(self.getAntimony(), input_names=[self.input_name], output_names=[self.output_name],
-                                is_fixed_input_species=True)
-        result = ctlsb.plotTransferFunction(**kwargs)
-        return result
+    
+    def isValid(self, **kwargs)->bool:
+        """
+        Compares the transfer function output to the simulation output for a staircase input.
+        Args:
+            kwargs: Staircase options
+        Returns:
+            bool: True if the network is valid
+        """
+        try:
+            new_kwargs = dict(kwargs)
+            if not "is_plot" in new_kwargs.keys():
+                new_kwargs["is_plot"] = False
+            timeseries =  self.plotTransferFunction(**new_kwargs)
+        except Exception as e:
+            return False
+        # Check that the output is monotonic
+        squared_error = np.sum((timeseries[SIMULATION] -  timeseries[PREDICTION])**2)
+        var = np.var(timeseries[SIMULATION])
+        return squared_error/var < 0.01
     
     ################# NETWORK CONSTRUCTION ###############
     @classmethod
@@ -217,7 +237,7 @@ class SISONetwork(object):
             kwargs: additional arguments for constructor
         """
         model = """
-        model %s()
+        model *%s()
         SI -> SO; kIO*SI
         SO -> ; kO*SO
         kIO = %f
@@ -225,7 +245,7 @@ class SISONetwork(object):
         SI = 0
         SO = 0
         end
-        """ % (cn.TE_MODEL_NAME, kI, kO)
+        """ % (MAIN_MODEL_NAME, kI, kO)
         transfer_function = control.TransferFunction([kI], [1, kO])
         return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
     
