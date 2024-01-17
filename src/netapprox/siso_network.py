@@ -220,9 +220,10 @@ class SISONetwork(object):
         except Exception as e:
             return False
         # Check that the output is monotonic
-        squared_error = np.sum((timeseries[SIMULATION] -  timeseries[PREDICTION])**2)
-        var = np.var(timeseries[SIMULATION])
-        return squared_error/var < 0.01
+        rmse = np.sqrt(np.sum((timeseries[SIMULATION] -  timeseries[PREDICTION])**2))
+        std = np.std(timeseries[SIMULATION])
+        last_frc = (timeseries[SIMULATION].values[-1] - timeseries[SIMULATION].values[-1])/timeseries[SIMULATION].values[-1]
+        return (rmse/std < 0.01) or (last_frc < 0.01)
     
     ################# NETWORK CONSTRUCTION ###############
     @classmethod

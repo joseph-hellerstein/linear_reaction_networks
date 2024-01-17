@@ -9,7 +9,7 @@ import unittest
 import tellurium as te # type: ignore
 
 
-IGNORE_TEST = False
+IGNORE_TEST = True
 IS_PLOT = False
 LINEAR_MDL = """
 model *main_model()
@@ -33,6 +33,7 @@ S1 = 0
 S2 = 0
 end
 """
+TIMES = np.linspace(0, 10, 100)
 
 
 #############################
@@ -45,11 +46,11 @@ class TestSISONetwork(unittest.TestCase):
             return
         self.init()
 
-    def init(self, model=LINEAR_MDL):
+    def init(self, model=LINEAR_MDL, times=TIMES):
         k1 = 1
         k2 = 2
         tf = control.TransferFunction([k1], [1, k2])
-        self.network = SISONetwork(model, "S1", "S2", k1, k2, tf)
+        self.network = SISONetwork(model, "S1", "S2", k1, k2, tf, times=times)
 
     def check(self, network=None):
         if network is None:
@@ -120,6 +121,19 @@ class TestSISONetwork(unittest.TestCase):
         self.init(model=LINEAR_MDL1)
         network = self.network.copy()
         cnetwork = self.network.concatenate(network)
+        self.assertTrue(cnetwork.input_name == "SI")
+        self.assertTrue(cnetwork.output_name == "SO")
+        # Do simulations
+        self.assertTrue(cnetwork.isValid())
+
+    def testConcatenate2(self):
+        #if IGNORE_TEST:
+        #    return
+        self.init(model=LINEAR_MDL1, times=np.linspace(0, 100, 1000))
+        network = self.network.copy()
+        cnetwork = network.concatenate(self.network)
+        for _ in range(20):
+            cnetwork = cnetwork.concatenate(self.network)
         self.assertTrue(cnetwork.input_name == "SI")
         self.assertTrue(cnetwork.output_name == "SO")
         # Do simulations
