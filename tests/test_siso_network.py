@@ -127,8 +127,8 @@ class TestSISONetwork(unittest.TestCase):
         self.assertTrue(cnetwork.isValid())
 
     def testConcatenate2(self):
-        #if IGNORE_TEST:
-        #    return
+        if IGNORE_TEST:
+            return
         self.init(model=LINEAR_MDL1, times=np.linspace(0, 100, 1000))
         network = self.network.copy()
         cnetwork = network.concatenate(self.network)
@@ -138,6 +138,18 @@ class TestSISONetwork(unittest.TestCase):
         self.assertTrue(cnetwork.output_name == "SO")
         # Do simulations
         self.assertTrue(cnetwork.isValid())
+
+    def testMakeSequentialNetwork(self):
+        #if IGNORE_TEST:
+        #    return
+        network = SISONetwork.makeSequentialNetwork([1, 2], [0.5, 0.6])
+        print(network.getAntimony())
+        self.assertTrue(network.input_name == "S0")
+        self.assertTrue(network.output_name == "S2")
+        timeseries = network.plotTransferFunction(is_plot=False)
+        print(timeseries)
+        import pdb; pdb.set_trace()
+        self.assertTrue(network.isValid())
        
 
 if __name__ == '__main__':

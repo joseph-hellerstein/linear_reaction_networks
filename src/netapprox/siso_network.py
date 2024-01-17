@@ -223,6 +223,7 @@ class SISONetwork(object):
         rmse = np.sqrt(np.sum((timeseries[SIMULATION] -  timeseries[PREDICTION])**2))
         std = np.std(timeseries[SIMULATION])
         last_frc = (timeseries[SIMULATION].values[-1] - timeseries[SIMULATION].values[-1])/timeseries[SIMULATION].values[-1]
+        import pdb; pdb.set_trace()
         return (rmse/std < 0.01) or (last_frc < 0.01)
     
     ################# NETWORK CONSTRUCTION ###############
@@ -265,19 +266,26 @@ class SISONetwork(object):
         if len(kIOs) != len(kOs):
             raise ValueError("kIs and kOs must be the same length")
         model = """
-            SI_%d -> S%d; kIO_%d*SI_%d
-            SO_%d -> ; kO_%d*SO_%d
-            kOI_%d = %f 
+            S%d -> S%d; kIO_%d*S%d
+            S%d -> ; kO_%d*S%d
+            kIO_%d = %f 
             kO_%d = %f
-
             """
         def makeStage(idx:int)->str:
-            return model % (idx, idx, idx, idx, idx, idx, idx, idx, kIOs[idx], idx, kOs[idx])
-        antimony_str = "\n".join([makeStage(n) for n in range(len(kIOs))])
+            return model % (idx-1, idx, idx, idx-1, idx, idx, idx, idx, kIOs[idx-1], idx, kOs[idx-1])
+        stage = makeStage(1)
+        stages = [makeStage(n) for n in range(1, len(kIOs)+1)]
+        antimony_str = "\n".join(stages)
+        model_str = """
+            model *%s()
+            %s
+            end
+        """ % (MAIN_MODEL_NAME, antimony_str)
         tf1 = control.TransferFunction([kIOs[0]], [1, kIOs[0]])
         tfs = np.prod([control.TransferFunction([kOs[n]], [1, kIOs[n] + kOs[n], kIOs[n]*kOs[n]]) for n in range(2, len(kIOs))])
         transfer_function = tf1*tfs
-        return cls("SI", "SO", antimony_str, kIOs[0], kOs[-1], transfer_function)
+        output_name = "S%d" % len(kIOs)
+        return cls(model_str, "S0", output_name, kIOs[0], kOs[-1], transfer_function)
     
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
