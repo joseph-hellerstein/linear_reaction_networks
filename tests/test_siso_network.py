@@ -9,7 +9,7 @@ import unittest
 import tellurium as te # type: ignore
 
 
-IGNORE_TEST = True
+IGNORE_TEST = False
 IS_PLOT = False
 LINEAR_MDL = """
 model *main_model()
@@ -71,6 +71,7 @@ class TestSISONetwork(unittest.TestCase):
     def testCopyAndEqual(self):
         if IGNORE_TEST:
             return
+        self.init()
         network = self.network.copy()
         self.assertTrue(network == self.network)
 
@@ -140,15 +141,12 @@ class TestSISONetwork(unittest.TestCase):
         self.assertTrue(cnetwork.isValid())
 
     def testMakeSequentialNetwork(self):
-        #if IGNORE_TEST:
-        #    return
-        network = SISONetwork.makeSequentialNetwork([1, 2], [0.5, 0.6])
-        print(network.getAntimony())
+        if IGNORE_TEST:
+            return
+        network = SISONetwork.makeSequentialNetwork([1, 2, 3], [0.5, 0.6, 0.7])
         self.assertTrue(network.input_name == "S0")
-        self.assertTrue(network.output_name == "S2")
-        timeseries = network.plotTransferFunction(is_plot=False)
-        print(timeseries)
-        import pdb; pdb.set_trace()
+        self.assertTrue(network.output_name == "S3")
+        _ = network.plotTransferFunction(is_plot=IS_PLOT)
         self.assertTrue(network.isValid())
        
 

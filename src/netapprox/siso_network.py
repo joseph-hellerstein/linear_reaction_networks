@@ -61,12 +61,40 @@ class SISONetwork(object):
         Returns:
             bool
         """
+        IS_DEBUG = False
+        is_true = True
         if not isinstance(other, SISONetwork):
+            if not is_true and IS_DEBUG:
+               print("**Failed 0") 
             return False
-        return (self.template == other.template) and (self.input_name == other.input_name) and \
-               (self.output_name == other.output_name) and (self.kI == other.kI) and (self.kO == other.kO) and \
-               (self.transfer_function == other.transfer_function) and (self.operating_region == other.operating_region) and \
-               (self.children == other.children) and (self.times == other.times)
+        is_true = self.template == other.template
+        if not is_true and IS_DEBUG:
+            print("**Failed 1") 
+        is_true = is_true and (self.input_name == other.input_name)
+        if not is_true and IS_DEBUG:
+            print("**Failed 2") 
+        is_true = is_true and (self.output_name == other.output_name)
+        if not is_true and IS_DEBUG:
+            print("**Failed 3") 
+        is_true = is_true and (self.kI == other.kI)
+        if not is_true and IS_DEBUG:
+            print("**Failed 4") 
+        is_true = is_true and (self.kO == other.kO)
+        if not is_true and IS_DEBUG:
+            print("**Failed 5") 
+        is_true = is_true and (self.transfer_function == other.transfer_function)
+        if not is_true and IS_DEBUG:
+            print("**Failed 6") 
+        is_true = is_true and (self.operating_region == other.operating_region)
+        if not is_true and IS_DEBUG:
+            print("**Failed 7") 
+        is_true = is_true and (self.children == other.children)
+        if not is_true and IS_DEBUG:
+            print("**Failed 8") 
+        is_true = is_true and (np.allclose(self.times, other.times))
+        if not is_true and IS_DEBUG:
+            print("**Failed 9")              
+        return is_true
 
     def copy(self)->"SISONetwork":
         """
@@ -223,7 +251,6 @@ class SISONetwork(object):
         rmse = np.sqrt(np.sum((timeseries[SIMULATION] -  timeseries[PREDICTION])**2))
         std = np.std(timeseries[SIMULATION])
         last_frc = (timeseries[SIMULATION].values[-1] - timeseries[SIMULATION].values[-1])/timeseries[SIMULATION].values[-1]
-        import pdb; pdb.set_trace()
         return (rmse/std < 0.01) or (last_frc < 0.01)
     
     ################# NETWORK CONSTRUCTION ###############
@@ -252,7 +279,7 @@ class SISONetwork(object):
         return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
     
     @classmethod
-    def makeSequentialNetwork(cls, kIOs:List[float], kOs:[float],
+    def makeSequentialNetwork(cls, ks:List[float], kps:[float],
                               operating_region=DEFAULT_OPERATION_REGION)->"SISONetwork":
         """
         Creates a sequential network of length len(kIs) = len(kOs). kI = kIs[0]; kO = kOs[-1].
@@ -260,32 +287,38 @@ class SISONetwork(object):
             input_name: input species to the network
             output_name: output species from the network
             model_reference: reference in a form that can be read by Tellurium
-            kIOs: Rates at which input is consumed 
-            kOs: Rates which output is consumed
+            ks: Rate at whcih Species n produces Species n+1 (n < N)
+            kps: Rates which Species n is degraded (n > 0)
         """
-        if len(kIOs) != len(kOs):
+        if len(ks) != len(kps):
             raise ValueError("kIs and kOs must be the same length")
         model = """
-            S%d -> S%d; kIO_%d*S%d
-            S%d -> ; kO_%d*S%d
-            kIO_%d = %f 
-            kO_%d = %f
+            S%d -> S%d; k_%d*S%d
+            S%d -> ; kp_%d*S%d
+            k_%d = %f 
+            kp_%d = %f
+            S%d = 0
             """
         def makeStage(idx:int)->str:
-            return model % (idx-1, idx, idx, idx-1, idx, idx, idx, idx, kIOs[idx-1], idx, kOs[idx-1])
-        stage = makeStage(1)
-        stages = [makeStage(n) for n in range(1, len(kIOs)+1)]
+            return model % (idx-1, idx, idx-1, idx-1, idx, idx, idx, idx-1, ks[idx-1], idx, kps[idx-1], idx)
+        stages = [makeStage(n) for n in range(1, len(ks)+1)]
         antimony_str = "\n".join(stages)
         model_str = """
             model *%s()
             %s
+            S0 = 0
             end
         """ % (MAIN_MODEL_NAME, antimony_str)
-        tf1 = control.TransferFunction([kIOs[0]], [1, kIOs[0]])
-        tfs = np.prod([control.TransferFunction([kOs[n]], [1, kIOs[n] + kOs[n], kIOs[n]*kOs[n]]) for n in range(2, len(kIOs))])
-        transfer_function = tf1*tfs
-        output_name = "S%d" % len(kIOs)
-        return cls(model_str, "S0", output_name, kIOs[0], kOs[-1], transfer_function)
+        tf1 = control.TransferFunction([ks[0]], [1, kps[-1]])
+        new_ks = ks[1:]
+        new_kps = kps[:-1]
+        tfn = np.prod([control.TransferFunction([new_ks[n]], [1, new_ks[n] + new_kps[n]])
+                                      for n in range(len(new_ks))])
+        transfer_function = tf1*tfn
+        output_name = "S%d" % len(ks)
+        kI = ks[0]
+        kO = kps[-1]
+        return cls(model_str, "S0", output_name, kI, kO, transfer_function)
     
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
