@@ -1,6 +1,6 @@
-from netapprox.antimony_template import AntimonyTemplate  # type: ignore
-from netapprox import util # type: ignore
-from netapprox import constants as cn # type: ignore
+from lrn_builder.antimony_template import AntimonyTemplate  # type: ignore
+from lrn_builder import util # type: ignore
+from lrn_builder import constants as cn # type: ignore
 
 import unittest
 import tellurium as te # type: ignore

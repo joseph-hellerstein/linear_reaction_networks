@@ -1,5 +1,7 @@
 control
 #controlSBML
+coverage
+docstring_expander
 jupyterlab
 lmfit
 matplotlib
@@ -7,7 +9,12 @@ mypy
 numpy
 pandas
 pandas-stubs
+pylint
 nose2
 seaborn
+symmathSBML
 sympy
 tellurium
+twine
+# dependencies for controlSBML
+tqdm

@@ -4,4 +4,4 @@ PYTHONPATH=`pwd`/src:${PYTHONPATH}:../controlSBML/src
 export PYTHONPATH
 MYPYPATH=`pwd`/controlSBML/src
 export MYPYPATH
-source apx/bin/activate
+source lrn/bin/activate

@@ -1,13 +1,13 @@
 """
-SISO reaction network and operations on it.
+SISO linear reaction network. Describes the network as both an Antimony model and a transfer function.
 
 Usage:
-  net = SISONetwork.makeTwoSpeciesNetwork("S1", "S2", 1, 1)
+  net = SLRN.makeTwoSpeciesNetwork("S1", "S2", 1, 1)
 
 """
-from netapprox.antimony_template import AntimonyTemplate
-from netapprox import constants as cn
-from netapprox import util
+from lrn_builder.antimony_template import AntimonyTemplate
+from lrn_builder import constants as cn
+from lrn_builder import util
 
 import control  # type: ignore
 import controlSBML as ctl # type: ignore
@@ -25,14 +25,14 @@ PREDICTION = "prediction"
 SIMULATION = "simulation"
 
 
-class SISONetwork(object):
+class SLRN(object):
     """
     Representation of a SISO reaction network.
     """
 
     def __init__(self, antimony_str:str, input_name:str, output_name:str, kI:float, kO:float,
                  transfer_function:control.TransferFunction, operating_region: List[float]=DEFAULT_OPERATION_REGION,
-                 children:Optional[List["SISONetwork"]]=None, times:List[float]=DEFAULT_TIMES):
+                 children:Optional[List["SLRN"]]=None, times:List[float]=DEFAULT_TIMES):
         """
         Args:
             input_name: input species to the network
@@ -63,7 +63,7 @@ class SISONetwork(object):
         """
         IS_DEBUG = False
         is_true = True
-        if not isinstance(other, SISONetwork):
+        if not isinstance(other, SLRN):
             if not is_true and IS_DEBUG:
                print("**Failed 0") 
             return False
@@ -96,12 +96,12 @@ class SISONetwork(object):
             print("**Failed 9")              
         return is_true
 
-    def copy(self)->"SISONetwork":
+    def copy(self)->"SLRN":
         """
         Returns:
-            SISONetwork
+            SLRN
         """
-        network = SISONetwork(self.template.original_antimony, self.input_name, self.output_name, self.kI, self.kO,  # type: ignore
+        network = SLRN(self.template.original_antimony, self.input_name, self.output_name, self.kI, self.kO,  # type: ignore
                            self.transfer_function, self.operating_region, self.children, self.times)
         network.template = self.template.copy()
         return network
@@ -255,7 +255,7 @@ class SISONetwork(object):
     
     ################# NETWORK CONSTRUCTION ###############
     @classmethod
-    def makeTwoSpeciesNetwork(cls, kI:float, kO:float, **kwargs)->"SISONetwork":
+    def makeTwoSpeciesNetwork(cls, kI:float, kO:float, **kwargs)->"SLRN":
         """
         Args:
             input_name: input species to the network
@@ -280,7 +280,7 @@ class SISONetwork(object):
     
     @classmethod
     def makeSequentialNetwork(cls, ks:List[float], kps:[float],
-                              operating_region=DEFAULT_OPERATION_REGION)->"SISONetwork":
+                              operating_region=DEFAULT_OPERATION_REGION)->"SLRN":
         """
         Creates a sequential network of length len(kIs) = len(kOs). kI = kIs[0]; kO = kOs[-1].
         Args:
@@ -322,7 +322,7 @@ class SISONetwork(object):
     
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
-                    operating_region=DEFAULT_OPERATION_REGION)->"SISONetwork":
+                    operating_region=DEFAULT_OPERATION_REGION)->"SLRN":
         """
         Args:
             input_name: input species to the network
@@ -334,13 +334,13 @@ class SISONetwork(object):
         raise NotImplementedError("Must implement")
 
     ################# NETWORK OPERATIONS ###############
-    def concatenate(self, other:"SISONetwork")->"SISONetwork":
+    def concatenate(self, other:"SLRN")->"SLRN":
         """
         Creates a new network that is the concatenation of this network and another.
         Args:
-            other: SISONetwork
+            other: SLRN
         Returns:
-            SISONetwork
+            SLRN
         """
         submodel1 = self.template.makeSubmodelTemplateName(1)
         submodel2 = self.template.makeSubmodelTemplateName(2)
@@ -353,22 +353,22 @@ class SISONetwork(object):
             """ % (submodel1, submodel2, self.output_name, other.input_name, self.input_name, other.output_name)
         transfer_function = self.transfer_function*other.transfer_function*control.TransferFunction(
             [1, self.kO], [1, self.kO + other.kI])
-        network = SISONetwork(model, "SI", "SO", self.kI, other.kO, transfer_function,
+        network = SLRN(model, "SI", "SO", self.kI, other.kO, transfer_function,
                               operating_region=self.operating_region, times=self.times,
                               children=[self, other])
         return network
     
-    def branchjoin(self, other:"SISONetwork")->"SISONetwork":
+    def branchjoin(self, other:"SLRN")->"SLRN":
         """
         Creates a new network by combining this network and another in parallel.
         Args:
-            other: SISONetwork
+            other: SLRN
         Returns:
-            SISONetwork
+            SLRN
         """
         raise NotImplementedError("Must implement")
     
-    def loop(self, k1:float, k2:float, k3:float, k4:float, k5:float, k6:float)->"SISONetwork":
+    def loop(self, k1:float, k2:float, k3:float, k4:float, k5:float, k6:float)->"SLRN":
         """
         Creates a new network by creating a feedback loop around the existing network. Let N.SI be the input species to the
         current network and N.SO be the output species from the current network. The new network will have the following reactions
@@ -381,7 +381,7 @@ class SISONetwork(object):
         """
         raise NotImplementedError("Must implement")
     
-    def amplify(self, k1, k2)->"SISONetwork":
+    def amplify(self, k1, k2)->"SLRN":
         """
         Creates a new network by amplifying the output of the current network. Let N.SI be the input species to the
         current network and N.SO be the output species from the current network. The new network will have the following reactions

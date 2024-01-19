@@ -1,4 +1,4 @@
-from netapprox.siso_network import SISONetwork # type: ignore
+from lrn_builder.slrn import SLRN # type: ignore
 
 import control # type: ignore
 import controlSBML as ctl # type: ignore
@@ -39,7 +39,7 @@ TIMES = np.linspace(0, 10, 100)
 #############################
 # Tests
 #############################
-class TestSISONetwork(unittest.TestCase):
+class TestSLRN(unittest.TestCase):
 
     def setUp(self):
         if IGNORE_TEST:
@@ -50,7 +50,7 @@ class TestSISONetwork(unittest.TestCase):
         k1 = 1
         k2 = 2
         tf = control.TransferFunction([k1], [1, k2])
-        self.network = SISONetwork(model, "S1", "S2", k1, k2, tf, times=times)
+        self.network = SLRN(model, "S1", "S2", k1, k2, tf, times=times)
 
     def check(self, network=None):
         if network is None:
@@ -66,7 +66,7 @@ class TestSISONetwork(unittest.TestCase):
     def testConstructor(self):
         if IGNORE_TEST:
             return
-        self.assertTrue(isinstance(self.network, SISONetwork))
+        self.assertTrue(isinstance(self.network, SLRN))
 
     def testCopyAndEqual(self):
         if IGNORE_TEST:
@@ -94,8 +94,8 @@ class TestSISONetwork(unittest.TestCase):
         kI = 0.5
         kO = 1.0
         times = np.linspace(0, 30, 300)
-        network = SISONetwork.makeTwoSpeciesNetwork(kI, kO, times=times)
-        self.assertTrue(isinstance(network, SISONetwork))
+        network = SLRN.makeTwoSpeciesNetwork(kI, kO, times=times)
+        self.assertTrue(isinstance(network, SLRN))
         self.assertTrue(network.input_name == "SI")
         self.assertTrue(network.output_name == "SO")
         self.assertTrue(network.kI == kI)
@@ -143,7 +143,7 @@ class TestSISONetwork(unittest.TestCase):
     def testMakeSequentialNetwork(self):
         if IGNORE_TEST:
             return
-        network = SISONetwork.makeSequentialNetwork([1, 2, 3], [0.5, 0.6, 0.7])
+        network = SLRN.makeSequentialNetwork([1, 2, 3], [0.5, 0.6, 0.7])
         self.assertTrue(network.input_name == "S0")
         self.assertTrue(network.output_name == "S3")
         _ = network.plotTransferFunction(is_plot=IS_PLOT)

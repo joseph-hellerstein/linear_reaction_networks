@@ -12,7 +12,7 @@ Features:
 :License: MIT
 """
 
-import netapprox.constants as cn
+import lrn_builder.constants as cn
 
 import re
 import tellurium as te # type: ignore
