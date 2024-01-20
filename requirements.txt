@@ -1,5 +1,5 @@
 control
-#controlSBML
+controlSBML
 coverage
 docstring_expander
 jupyterlab
@@ -17,4 +17,4 @@ sympy
 tellurium
 twine
 # dependencies for controlSBML
-tqdm
+#tqdm

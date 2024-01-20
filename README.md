@@ -1,2 +1,2 @@
 # network_approximations
-Investigation into linear approximations to chemical reaction networks
+Building reaction networks whose dynamics can be described by a system of linear differential equations.
