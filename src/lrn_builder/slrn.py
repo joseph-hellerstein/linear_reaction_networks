@@ -1,5 +1,5 @@
 """
-SISO linear reaction network. Describes the network as both an Antimony model and a transfer function.
+SISO linear reaction network (SLRN). Describes the network as both an Antimony model and a transfer function.
 
 Usage:
   net = SLRN.makeTwoSpeciesNetwork("S1", "S2", 1, 1)
