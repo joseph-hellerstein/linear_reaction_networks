@@ -195,10 +195,20 @@ approximate complex simulations.
 
 We use subscripted and superscripted $S$ to indicate chemical species. Where there is no confusion, we use the same symbol for its concentration as well. In contexts where there may be confusion between the name and its concentration, we explicitly indicate a concentration using square brackets. For example, $[S_0]$ is the concentration of species $S_0$.
 
-A (uni-uni) {\bf reaction} is a triple expressed as $S_I \xrightarrow{k} S_O$ indicates the transformation of mass from species $S_I$ to $S_O$ using mass action with the kinetic constant $k$. If $k < 0$, then $S_O$ is transformed into $S_I$; that is, $S_O \xrightarrow{-k} S_I$. If $S_I = \emptyset$ or $S_O = \emptyset$, then this a boundary reaction. For an input boundary, $k_I$ is a fixed rate. If $S_O = \emptyset$, then this is a degradation reaction.
+A {\bf reaction} is a four tupleexpressed as $S_I \xrightarrow{k} m S_O$
+indicates the transformation of mass from species $S_I$ to $m$ molecules of $S_O$
+using mass action with the kinetic constant $k$. If $k < 0$,
+then $S_O$ is transformed into $S_I$; that is, $S_O \xrightarrow{-k} S_I$.
+If $S_I = \emptyset$ or $S_O = \emptyset$, then this a boundary reaction.
+For an input boundary, $k_I$ is a fixed rate.
+If $S_O = \emptyset$, then this is a degradation reaction.
 
 Let $\mathcal{R}$ be a set of reactions, and let
 $\mathcal{S}$ be the set of all reactants and products in $\mathcal{R}$.
+$S_I$ is the input species for the network.
+We require that $S_I$ never appear as a product in the reaction network.
+$S_O$ is the output species.
+We require that $S_O$ never appears as a reactant in the reaction network.
 A {\bf SISO Linear Reaction Network (SLRN)} is
 a 5-tuple
 $<\mathcal{R}, S_I, S_O, k_I, k_O>$ where:
@@ -215,16 +225,36 @@ capital letter superscript.
 For example, for network $A$, we have the 5-tuple
 $<\mathcal{R}^A, S^A_I, S^A_O, k^A_I, k^A_O>$.
 
-Examples of SLRNs and their transfer functions.
+\subsubsection{Sequential Reaction Network}
 
-%%%%%%%%%%%%%%%%%
 We start with a sequential network with $N$ stages.
-\subsubsection{Concatenate}
+There are $N$ stages with an input and output. The input is $S_0$ and the output is $S_N$. Formally, we have
+\begin{eqnarray}
+s S_n (s) & =&  k_{n-1} S_{n-1} (s) - (k_n + k^{\prime}) S_n (s) ,~ n>0
+\end{eqnarray}
+
+From this, we derive the transfer function for the network.
+\begin{align}
+S_n (s) & = & \frac{k_{n-1} S_{n-1}}{s + k_n + k^{\prime}_n} \nonumber \\
+S_1 (s) & = & \frac{k_0 S_0}{s + k_1 + k^{\prime}_1} \nonumber \\
+S_2 (s) & = & \frac{k_1 S_1}{s + k_2 + k^{\prime}_2} \nonumber \\
+  & = & \frac{k_1 k_0 S_0}{(s + k_2 + k^{\prime}_2)(s + k_1 + k^{\prime}_1)}
+\end{align}
+
+\begin{eqnarray}
+S_N (s) & = & \frac{S_0 (s) \prod_{n=0}^{N-1} k_n }{\prod_{n=1}^N(s + k_n + k^{\prime}_n)} \nonumber \\
+    & = &  \frac{ k_0 }{s  +  k^{\prime}_N}  
+    \frac{\prod_{n=1}^{N-1} k_n }{\prod_{n=1}^{N-1}(s + k_n + k^{\prime}_n)} S_0(s) \nonumber \\
+G (s) & = &  \frac{ k_0 }{s  +  k^{\prime}_N}  
+    \frac{\prod_{n=1}^{N-1} k_n }{\prod_{n=1}^{N-1}(s + k_n + k^{\prime}_n)}
+\end{eqnarray}
+where $k_N = 0= k^{\prime}_0$.
+
 \begin{figure}
         \centering
          \includegraphics[scale=0.4]{figures/sequential_network.png}
-         \caption[]{}
-         \label{fig:concatenate}
+          \caption[]{An $N$ stage sequential network.}
+         \label{fig:sequential_network}
 \end{figure}
 
 
@@ -233,6 +263,14 @@ We start with a sequential network with $N$ stages.
 These are operations applied to SLRNs and produce a new SLRN.
 In the sequel, $A, B$ are SLRNs.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsubsection{concatenate}
+\begin{figure}
+         \centering
+         \includegraphics[scale=0.3]{figures/concatenate.png}
+          \caption[]{Concatenate operation on networks $A$ and $B$.}
+         \label{fig:concatenate}
+\end{figure}
 
 {\bf Concatenate} is an asymmetric, binary operation.
 Let $A, B$ be such that $\mathcal{S}^A \bigcap \mathcal{S}^B =
@@ -252,9 +290,16 @@ Transfer function of the {\em concatenate} operation.
 
 %%%%%%%%%%%%%%%%%
 \subsubsection{Branchjoin}
+\begin{figure}
+         \centering
+         \includegraphics[scale=0.3]{figures/branchjoin.png}
+          \caption[]{Branchjoin operation on networks $A$ and $B$.}
+         \label{fig:branchjoin}
+\end{figure}
+
 {\bf Branchjoin} is a symmetric, binary operation on SLRNs $A, B$ for which
 $S^A \bigcap S^B = \emptyset$.
-$branchjoin(A, k_{1a}, k_{1b}, k_{2a}, k_{2b}, k_3)$
+$branchjoin(A, B; k_{1a}, k_{1b}, k_{2a}, k_{2b}, k_3)$
 produces:
 \begin{itemize}
 \item $S_I$, a new species
@@ -276,9 +321,41 @@ $S_O \xrightarrow{k_3} \emptyset$
 \end{itemize}
 
 Transfer function of the {\em branchjoin} operation.
+Let $N_1, N_2$ be reaction networks with transfer functions $G^A(s), G^B(s)$. Let $H(s)$ be the transfer function for $N^A + N^B$.
+
+We begin by writing the state equations based on the flow diagram.
+   \begin{eqnarray}
+   s S^A_I (s) & = & k_{1a} S_I(s) - k^A_I S^A_I (s) \nonumber \\
+   s S^B_I (s) & = & k_{1b} S_I(s) - k^B_I S^B_I (s) \nonumber \\
+   S^A_O (s) & = &  S^A_I (s) G^A(s) \frac{s + k^A_O}{s + k^A_O + k_{2a}} \nonumber \\
+   S^B_O (s) & = & S^B_I (s)  G^B(s) \frac{s + k^B_O}{s + k^B_O + k_{2b}} \nonumber \\
+   sS_O (s) & = & k_{2a} S^A_O(s) + k_{2b} S^B_O(s) - k_3 S_O(s)
+   \end{eqnarray}
+
+The following are dervied from the state equations.
+\begin{eqnarray}
+S^A_I(s) & = & \frac{k_{1a} S_I (s)}{s + k^A_I} \nonumber \\
+S^B_I(s) & = & \frac{k_{1b} S_I (s)}{s + k^B_I} \nonumber \\
+S^A_O & = & \frac{k_{1a} S_I (s)}{s + k^A_I} G^A(s) \frac{s + k^A_O}{s + k^A_O + k_{2a}} \nonumber\\
+   & = & \frac{k_{1a}}{s + k^A_I} \frac{s + k^A_O}{s + k^A_O + k_{2a}}  G^A(s) S_I (s) \nonumber \\
+S^B_O
+   & = & \frac{k_{1b}}{s + k^B_I} \frac{s + k^B_O}{s + k^B_O + k_{2b}}  G^B(s) S_I (s) \nonumber \\
+S_O (s) & = & \frac{k_{2a} S^A_O(s) + k_{2b} S^B_O(s) }{s + k_3} \nonumber \\
+G(s) & = & \frac{k_{1a} k_{2a} (s + k^A_O) \beta(s) G^A(s) }{\alpha(s) \beta(s) (s + k_3)} \nonumber \\
+& & +  \frac{k_{1b}  k_{2b} (s + k^B_O)\alpha(s) G^B(s) }{\alpha(s) \beta(s) (s + k_3)} \\
+\end{eqnarray}
+
+$\alpha(s) = (s + k^A_I) (s + k^A_O + k_{2a})$ and
+$\beta(s) = (s + k^B_I) (s + k^B_O + k_{2b})$.
 
 %%%%%%%%%%%%%%%%%
 \subsubsection{Scale}
+\begin{figure}
+         \centering
+         \includegraphics[scale=0.4]{figures/scale.png}
+          \caption[]{Scale operation on network $A$.}
+         \label{fig:scale}
+\end{figure}
 {\bf Scale} is a unary operation.
 $scale(A, k, m)$ produces 
 \begin{itemize}
@@ -295,6 +372,12 @@ Transfer function of the {\em scale} operation.
 
 %%%%%%%%%%%%%%%%%
 \subsubsection{Loop}
+\begin{figure}
+         \centering
+         \includegraphics[scale=0.4]{figures/loop.png}
+          \caption[]{Loop operation on network $A$.}
+         \label{fig:concatenate}
+\end{figure}
 {\bf Loop} is a unary operation.
 $loop(A, S_I, S_O, k_1, k_2, k)$ is a unary operation that produces
 the SLRN:
@@ -321,10 +404,12 @@ Transfer function of the {\em loop} operation.
 \item
 Principles
 \begin{enumerate}
-\item
-Compensation for retroactivity
 \item 
 Adding poles and zeros
+\item
+Modular design of network so can account for retroactivity
+\item
+Technique for adjusting transfer functions for retroactivity
 \end{enumerate}
 
 \end{enumerate}
@@ -333,7 +418,12 @@ Adding poles and zeros
 
 \section{Issues}
 \begin{enumerate}
-    \item SLRNBuilder?
+    \item Should I consider MIMO components? This seems possible, but it means more complex state models?
+    \begin{enumerate}
+    \item There should be separate $branch$ and $join$ operations.
+    \item Inputs and outputs should be indexed, $S_{I_i}$, $S_{O_j}$.
+    \end{enumerate}
+    \item First develop the SISO theory?
 \end{enumerate}
 
 \bibliographystyle{plainnat}
