@@ -287,6 +287,7 @@ the following SLRN:
 \end{itemize}
 
 Transfer function of the {\em concatenate} operation.
+$$G(s) = G^A(s) G^B(s)\frac{s + k^A_O}{s+ k^B_I + k^A_O}$$.
 
 %%%%%%%%%%%%%%%%%
 \subsubsection{Branchjoin}
@@ -361,17 +362,24 @@ $scale(A, k, m)$ produces
 \begin{itemize}
 \item $S_I = S^A_O$
 \item $S_O$, a new species
-\item $R = \mathcal{R}^A \bigcup \{S_O \xrightarrow{k} m^{\prime} S_O\}$
-where $m^{\prime} = \frac{k^A_O + k}{k^A_O} m$.
+\item $R = \mathcal{R}^A \bigcup \{S_O \xrightarrow{k} \frac{m}{k} S_O\}$
 \item $k_I = k$
 \item $k_O = 0$
 \end{itemize}
 
 Transfer function of the {\em scale} operation.
+Scale is a concatenation.
+The transfer function for the scale reaction is
+$H(s) = \frac{km/k } {s}$, and the concatenation with $A$
+has the transfer function
+$G(s) = G^A(s) \frac{k^A_O}{k^A_O} H(s)$ and so
+$G(0) = m$.
 
 
 %%%%%%%%%%%%%%%%%
 \subsubsection{Loop}
+\color{red}{Eliminate $X_0$}\color{black}.
+
 \begin{figure}
          \centering
          \includegraphics[scale=0.4]{figures/loop.png}
@@ -394,7 +402,46 @@ the SLRN:
 \item $k_O = k^A_O + k$
 \end{itemize}
 
-Transfer function of the {\em loop} operation.
+Transfer function of the {\em loop} operation is derived in
+Fig.~\ref{fig:loop-derivation}
+\begin{figure*}
+\begin{eqnarray}
+X_O (s) & = & \frac{k_2 k_3  G^{\prime} (s) X_I(s)}{s + k_4 + k_5}  \nonumber \\
+  &= &  \frac{k_2 k_3  G^{\prime} (s)}{s + k_4 + k_5} \frac{k_5 X_O(s) + k_1 S_I (s)}{s + k_2} \nonumber \\
+X_O (s) (s + k_2) (s + k_4 + k_5)  & = &
+  k_5 X_O(s) k_2 k_3  G^{\prime}(s) + k_1 S_I (s) k_2 k_3 G^{\prime}(s) \nonumber \\
+X_0 (s) & = & \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
+{(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) } \nonumber \\
+S_O (s) & = & \frac{k_4}{s} \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
+  {(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
+   & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime}(s) S_I (s)}
+  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
+H(s) & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime} (s)}
+  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
+  & = & \frac{ K_1 G^{\prime} (s)}
+  {(s + k_6) \lbrack D(s) - K_2 G^{\prime} (s)\rbrack  } \nonumber \\
+\end{eqnarray}
+where $K_1 = k_1 k_2 k_3 k_4$, $K_2 = k_2 k_3 k_5$, $D(s) = (s + k_2) (s + k_4 + k_5)$.
+
+\begin{eqnarray}
+X_O (s) & = & \frac{k_2 k_3  G^{\prime} (s) X_I(s)}{s + k_4 + k_5}  \nonumber \\
+  &= &  \frac{k_2 k_3  G^{\prime} (s)}{s + k_4 + k_5} \frac{k_5 X_O(s) + k_1 S_I (s)}{s + k_2} \nonumber \\
+X_O (s) (s + k_2) (s + k_4 + k_5)  & = &
+  k_5 X_O(s) k_2 k_3  G^{\prime}(s) + k_1 S_I (s) k_2 k_3 G^{\prime}(s) \nonumber \\
+X_0 (s) & = & \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
+{(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) } \nonumber \\
+S_O (s) & = & \frac{k_4}{s} \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
+  {(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
+   & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime}(s) S_I (s)}
+  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
+H(s) & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime} (s)}
+  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
+  & = & \frac{ K_1 G^{\prime} (s)}
+  {(s + k_6) \lbrack D(s) - K_2 G^{\prime} (s)\rbrack  } \nonumber \\
+\end{eqnarray}
+where $K_1 = k_1 k_2 k_3 k_4$, $K_2 = k_2 k_3 k_5$, $D(s) = (s + k_2) (s + k_4 + k_5)$.
+\caption{Derivation of transfer function for the loop operation}\label{fig:loop-derivation}
+\end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Discussion}\label{discussion}
