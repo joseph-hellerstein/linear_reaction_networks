@@ -378,7 +378,6 @@ $G(0) = m$.
 
 %%%%%%%%%%%%%%%%%
 \subsubsection{Loop}
-\color{red}{Eliminate $X_0$}\color{black}.
 
 \begin{figure}
          \centering
@@ -402,45 +401,39 @@ the SLRN:
 \item $k_O = k^A_O + k$
 \end{itemize}
 
-Transfer function of the {\em loop} operation is derived in
+The following are the state equations of this system.
+\begin{eqnarray}
+s S_O (s) & = & k_3 S^A_O (s) - (k_4 + k_5) S_O \nonumber \\
+S_O & = & \frac{k_3 S^A_O(s)}{s + k_4 + k_5} \\
+s S^A_I(s) & = & k_2 X_I(s) - k^A_I S^A_I(s) \nonumber \\
+S^A_I(s) & = & \frac{k_2 X_I(s)}{s + k^A_I} \\
+s X_I (s) & = & k_5 S_O(s) + k_1 S_I (s) - k_2 X_I (s) \nonumber \\
+X_I(s) & = & \frac{k_5 S_O(s) + k_1 S_I (s)}{s + k_2} \\
+S^A_O(s) & = & S^A_I(s) G^A(s) \frac{s + k^A_O}{s + k^A_O + k_3}
+\end{eqnarray}
+We manipulate the state equations to derive the transfer function of
+the loop operation.
+This analysis is contained in
 Fig.~\ref{fig:loop-derivation}
+
 \begin{figure*}
 \begin{eqnarray}
-X_O (s) & = & \frac{k_2 k_3  G^{\prime} (s) X_I(s)}{s + k_4 + k_5}  \nonumber \\
-  &= &  \frac{k_2 k_3  G^{\prime} (s)}{s + k_4 + k_5} \frac{k_5 X_O(s) + k_1 S_I (s)}{s + k_2} \nonumber \\
-X_O (s) (s + k_2) (s + k_4 + k_5)  & = &
-  k_5 X_O(s) k_2 k_3  G^{\prime}(s) + k_1 S_I (s) k_2 k_3 G^{\prime}(s) \nonumber \\
-X_0 (s) & = & \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
-{(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) } \nonumber \\
-S_O (s) & = & \frac{k_4}{s} \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
-  {(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
-   & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime}(s) S_I (s)}
-  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
-H(s) & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime} (s)}
-  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
-  & = & \frac{ K_1 G^{\prime} (s)}
-  {(s + k_6) \lbrack D(s) - K_2 G^{\prime} (s)\rbrack  } \nonumber \\
+s S_O (s) & = & k_3   G^A(s) \frac{s + k^A_O}{ s + k^A_O + k_3}  S^A_I(s) - (k_4  + k_5) S_O (s) \nonumber \\
+& = &
+  k_2 k_3  G(s) \frac{s + k^A_O}{(s + k^A_O + k_3)(s + k^A_I)} X_I(s)
+   -(k_4 S + k_5 )S_O (s) \nonumber \\
+& = &
+k_2 k_3  G^{\prime}(s)X_I(s) - (k_4 + k_5) S_O(s)  \nonumber \\
+S_O & = &  \frac{k_2 k_3  G^{\prime}(s) X_I(s)}{s + k_4 + k_5  }  \nonumber \\
+    & = &  \frac{k_2 k_3  G^{\prime}(s)}{s + k_4 + k_5  } \frac{k_5 S_O(s) + k_1 S_I (s)}{s + k_2} \nonumber \\
+(s + k_4 + k_5)(s + k_2)S_O & = &
+   k_2 k_3  G^{\prime}(s) (k_5 S_O(s) + k_1 S_I(s))
+    \nonumber \\
+S_O & = &  \frac{k_1 k_2 k_3  G^{\prime}(s) S_I(s)}{(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 G^{\prime}(s)} \nonumber \nonumber \\
+H(s) & = & \frac{k_1 k_2 k_3  G^{\prime}(s)}{(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
+    & = & \frac{k_1 k_2 k_3  (s + k^A_O) G^A(s)}{(s + k^A_O + k_3)(s + k^A_I)(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 (s + k^A_O)G(s)}
 \end{eqnarray}
-where $K_1 = k_1 k_2 k_3 k_4$, $K_2 = k_2 k_3 k_5$, $D(s) = (s + k_2) (s + k_4 + k_5)$.
-
-\begin{eqnarray}
-X_O (s) & = & \frac{k_2 k_3  G^{\prime} (s) X_I(s)}{s + k_4 + k_5}  \nonumber \\
-  &= &  \frac{k_2 k_3  G^{\prime} (s)}{s + k_4 + k_5} \frac{k_5 X_O(s) + k_1 S_I (s)}{s + k_2} \nonumber \\
-X_O (s) (s + k_2) (s + k_4 + k_5)  & = &
-  k_5 X_O(s) k_2 k_3  G^{\prime}(s) + k_1 S_I (s) k_2 k_3 G^{\prime}(s) \nonumber \\
-X_0 (s) & = & \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
-{(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) } \nonumber \\
-S_O (s) & = & \frac{k_4}{s} \frac{ k_1  k_2 k_3 G^{\prime}(s) S_I (s)}
-  {(s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
-   & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime}(s) S_I (s)}
-  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
-H(s) & = & \frac{ k_1  k_2 k_3 k_4 G^{\prime} (s)}
-  {(s + k_6) \lbrack (s + k_2) (s + k_4 + k_5) - k_2 k_3 k_5 G^{\prime} (s) \rbrack } \nonumber \\
-  & = & \frac{ K_1 G^{\prime} (s)}
-  {(s + k_6) \lbrack D(s) - K_2 G^{\prime} (s)\rbrack  } \nonumber \\
-\end{eqnarray}
-where $K_1 = k_1 k_2 k_3 k_4$, $K_2 = k_2 k_3 k_5$, $D(s) = (s + k_2) (s + k_4 + k_5)$.
-\caption{Derivation of transfer function for the loop operation}\label{fig:loop-derivation}
+\caption{Loop derivations}\label{fig:loop-derivation}
 \end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
