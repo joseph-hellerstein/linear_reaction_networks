@@ -6,6 +6,17 @@ lrn/
 
 apx
 ~*.pptx
+*.swp
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.out
+main.run.xml
+manifest.txt
+oup-authoring*
+readme
+main.pdf
 
 # C extensions
 *.so

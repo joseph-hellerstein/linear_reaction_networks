@@ -91,7 +91,7 @@
 
 %\subtitle{Subject Section}
 
-\title[LRNBuilder]{LRNBuilder: A System for the Modular Construction of Linear Reaction Networks and their Transfer Functions}
+\title[Modular Reaction Networks]{A Mathematical Framework for Constructing Modular Reaction Networks}
 
 \author[1,$\ast$]{First Author}
 
@@ -146,21 +146,60 @@ Here is a citation (\cite{al2002handgrip}).
 \item
 Motivation
 \begin{enumerate}
-\item Create approximations to nonlinear reaction networks
-that are easily analyzed for properties such as stability, oscillations,
-settling times, DC gain. Doing so provides the following benefits:
-\item Ways that an existing network can be transformed.
-\item Identification of functions of biological systems by analyzing
-composition of biochemical networks
-\item 
-Applications to synthetic biology
+\item
+Modules are a fundamental concept in electrical, mechanical and software engineering.
+\item
+A module has well defined inputs and outputs, and there is a clear specification as to how inputs are transformed into outputs. A system is assembled from modules that only interact through their inputs and outputs. Further, there are well defined ways to combine modules that result in new modules with predictable behaviors.
+\item
+For example, ...
 \end{enumerate}
-
+\item
+There have been many efforts to define modules for engineering biological systems.
+\begin{enumerate}
+\item BioBricks
+\item Gennarri
+\end{enumerate}
 %%%%%%%%%%%
-\item Prior work
+\item Scope and Contributions.
 
-%%%%%%%%%%%
-\item Challenges
+Our interest is in using modularity for the analysis and design
+of biological systems.
+Modularity facilitates analysis by
+attributing system behaviors to the behaviors of modules
+and their interactions.
+Modularity facilites design by guiding the choice of
+modules and their composition to achieve desired system behaviors.
+However,
+both analysis and design require an ability to predict
+the behavior of a system from the behavior of its modules
+and their compositions.
+
+Herein, we focus on the prediction of system behaviors based on the
+behaviors of modules and the manner in which they are composed.
+Our contribution is theoretical in that we do not build biological components.
+Rather, we use the abstraction of a reaction network to
+describe biological modules and systems.
+By a reaction, we mean the conversion of one or more 
+biological entities (e.g., chemical species, cells)
+into other biological entities with a flux specified by a rate law
+that is expressed
+as an algebraic function of the concentration of biological entities.
+Our approach is limited in many ways since it
+does not address the details of particular biochemical environments.
+However, our approach applies broadly to biochemical systems.
+
+{\color{red} what behaviors?} \color{black}
+
+Our contributions are:
+\begin{itemize}
+\item
+Definition of a {\bf modular reaction network (MRN)} provides for predicting
+composition of MRNs.
+\item
+Specification of several techniques for composing MRNs and specification
+of behavior.
+\end{itemize}
+
 \begin{enumerate}
 \item
 retroactivity
@@ -191,7 +230,7 @@ approximate complex simulations.
 
 
 \section{Results}\label{results}
-\subsection{SISO Linear Reaction Networks}
+\subsection{Modular Reaction Networks}
 
 We use subscripted and superscripted $S$ to indicate chemical species. Where there is no confusion, we use the same symbol for its concentration as well. In contexts where there may be confusion between the name and its concentration, we explicitly indicate a concentration using square brackets. For example, $[S_0]$ is the concentration of species $S_0$.
 
