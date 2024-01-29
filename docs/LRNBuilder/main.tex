@@ -118,14 +118,7 @@
 %online.}
 
 \abstract{Most reaction networks are nonlinear in the sense that their dynamics are described by a system of nonlinear differential equations. In contrast, linear reaction networks (LRN) have dynamics that are described by a system of linear of differential equations. LRNs have appeal because they have an exact solution in the time domain, and so are amenable to use in systems for designing and/or modification to achieve desired goals related to stability, oscillations, settling times, and regulation. Herein, we on single-input, single-output (SISO) linear reaction networks (SLRN).
-Key results are:
-\begin{enumerate}
-    \item Nonlinear reaction networks can be approximated with arbitrary accuracy by a linear reaction network.
-    \item The transfer functions are derived for SLRNs that are constructed using the following operations on other SLRNs: concatenation, branch-join, scaling, and (feedback) loops.
-    \item We implement LRNBuilder, a system that builds SLRNs constructed using these operations.
-    \item We develop an algorithm for constructing an SLRN from a transfer function that is a rational polynomial.
-    \item We define modules that are sufficient to construct transfer functions for composed modules and generate reaction networks.
-\end{enumerate}}
+Key results are:}
 \keywords{keyword1, Keyword2, Keyword3, Keyword4}
 
 % \boxedtext{
@@ -149,35 +142,37 @@ Motivation
 \item
 Modules are a fundamental concept in electrical, mechanical and software engineering.
 \item
+Define characteristics of modules (Gennari): inputs, outputs, behaviors.
+By behaviors, we mean the relationship between the time course
+of inputs (e.g., glucose concentration) and the
+time course of outputs (e.g., the
+concentration of ATP).
+\item
+Example of predicting time course behaviors.
+\item
 A module has well defined inputs and outputs, and there is a clear specification as to how inputs are transformed into outputs. A system is assembled from modules that only interact through their inputs and outputs. Further, there are well defined ways to combine modules that result in new modules with predictable behaviors.
+Modularity facilitates analysis by
+attributing system behaviors to the behaviors of modules
+and the interactions between modules.
+Modularity facilites design by providing a ``building block" approach
+to constructing complex systems with desired behaviors.
 \item
 For example, ...
 \end{enumerate}
 \item
 There have been many efforts to define modules for engineering biological systems.
 \begin{enumerate}
-\item BioBricks
-\item Gennarri
+\item BioBricks (well defined parts, but not modules)
+\item Gennarri (benefits of violating modularity in models)
 \end{enumerate}
 %%%%%%%%%%%
 \item Scope and Contributions.
+Although there has been considerable progress in the development of standard
+biological ``parts", there has been considerably less progress in the
+development of biological modules with predictable behaviors.
+In particular, we know of no work that defines biological modules
+that can be composed in a way that results in predictable time course behaviors.
 
-Our interest is in using modularity for the analysis and design
-of biological systems.
-Modularity facilitates analysis by
-attributing system behaviors to the behaviors of modules
-and the interactions between modules.
-Modularity facilites design by guiding the choice of
-modules and their composition to achieve desired system behaviors.
-By behaviors, we mean the relationship between the time course
-of inputs (e.g., glucose concentration) and the
-time course of outputs (e.g., the
-concentration of ATP).
-
-Both analysis and design require an ability to predict
-system outputs from system inputs by making use of the
-input-output behavior of modules
-and the manner in which modules are composed.
 Our contribution is theoretical in that we do not build biological components.
 Rather, we use the abstraction of a reaction network to
 describe biological modules and systems.
@@ -188,7 +183,23 @@ that is expressed
 as an algebraic function of the concentration of biological entities.
 Our approach is limited in many ways since it
 does not address the details of particular biochemical environments.
-However, our approach applies to a wide variety of biological systems.
+
+Herein, we take a first step towards predicting defining modules
+and module compositions with predictable beahviors.
+We limit ourselves in two ways.
+First, we only consider biological systems whose kinetics can be described
+using systems of linear differential equations.
+Although restrictive in a mathematical sense, our results are
+still of considerable interest since it is common to use
+such linear approximations to approximate deterministic, nonlinear systems.
+A second restriction is that we only consider single input, single output (SISO)
+systems.
+Extensions to multiple input, multiple output (MIMO) systems are bit more mathematical,
+and are deferred to future work.
+Even so, our results here can be applied to MIMO systems of modest size complexity
+by constructing a MIMO system from
+multiple SISO systems.
+
 
 Our contributions are:
 \begin{itemize}
