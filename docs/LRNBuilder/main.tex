@@ -164,52 +164,83 @@ There have been many efforts to define modules for engineering biological system
 \begin{enumerate}
 \item BioBricks (well defined parts, but not modules)
 \item Gennarri (benefits of violating modularity in models)
+\item retroactivity
 \end{enumerate}
 %%%%%%%%%%%
 \item Scope and Contributions.
 Although there has been considerable progress in the development of standard
 biological ``parts", there has been considerably less progress in the
 development of biological modules with predictable behaviors.
-In particular, we know of no work that defines biological modules
-that can be composed in a way that results in predictable time course behaviors.
+Such a capability aids analyzing complex
+biological systems by providing a way to decompose complex outputs, and
+it can provide a ``building block" approach to building novel biological systems.
 
+Herein, we address the prediction of time courses for
+the composition of biological modules in the form of transfer functions.
 Our contribution is theoretical in that we do not build biological components.
 Rather, we use the abstraction of a reaction network to
-describe biological modules and systems.
-By a reaction, we mean the conversion of one or more 
-biological entities (e.g., chemical species, cells)
-into other biological entities with a flux specified by a rate law
-that is expressed
-as an algebraic function of the concentration of biological entities.
-Our approach is limited in many ways since it
-does not address the details of particular biochemical environments.
+describe biological modules and their composition.
+A reaction has two parts: (a) transformation of the reactant mass
+into products;
+and (b)
+a rate law that
+describes the reaction flux
+as an algebraic expression of the concentration of chemical species.
+For example, the hydrolysis reaction $ATP \rightarrow ADP + Pi$
+transforms $ATP$ into $ADP$ and $Pi$ (inorganic phosphate),
+and has flux defined by mass action kinetics as
+$k [ATP]$, where $k$ is the kinetic constant
+and $[ATP]$ is the concentration of $ATP$.
+In the sequel, we combine mass transformation and the rate law by
+writing $ATP \xrightarrow{k} ADP + Pi$.
+Although the foregoing is described in terms of
+chemical species, the concept of
+a reaction can be
+generalized to other biological entities such as
+organelles, cells, and whole organisms (as in predator-prey models).
 
-Herein, we take a first step towards predicting defining modules
-and module compositions with predictable beahviors.
-We limit ourselves in two ways.
-First, we only consider biological systems whose kinetics can be described
-using systems of linear differential equations.
-Although restrictive in a mathematical sense, our results are
-still of considerable interest since it is common to use
-such linear approximations to approximate deterministic, nonlinear systems.
-A second restriction is that we only consider single input, single output (SISO)
+As noted above, our predictions take the form of transfer functions,
+and henve
+we only consider
+reaction networks whose dynamics can be described
+as a system of linear, ordinary differential equations (ODEs).
+Such networks are easily constructed by requiring that reactions have either
+(a) a single reactant with unit stoichiometry mass action kinetics,
+or (b) no reactant or no product (boundary reaction) with zeroth order kinetics.
+An example of (a) is $ATP \xrightarrow{k} ADP + Pi$;
+an example of (b) is $\emptyset \xrightarrow{k^{\prime}} Pi$ with
+a fixed rate of $k^{\prime}$.
+Although linearity is restrictive in a mathematical sense, our results are
+still of considerable interest since it is common to approximate
+nonlinear systems with a linear model. ??refs
+
+Our scope is further limited to
+single input, single output (SISO)
 systems.
-Extensions to multiple input, multiple output (MIMO) systems are bit more mathematical,
-and are deferred to future work.
-Even so, our results here can be applied to MIMO systems of modest size complexity
-by constructing a MIMO system from
+Extensions to multiple input, multiple output (MIMO) systems require attention to a
+number of additional details (e.g., observability, controllability),
+and so are deferred to future work.
+However, we note that the superposition property of linear systems
+provides a way to construct
+MIMO systems
+from
 multiple SISO systems.
 
 
-Our contributions are:
+This paper makes the following contributions:
 \begin{itemize}
 \item
-Definition of a {\bf modular reaction network (MRN)} provides for predicting
-composition of MRNs.
+definition of a {\bf SISO linear modular (SLM)} reaction network
+that is sufficient to enable module composition;
 \item
-Specification of several techniques for composing MRNs and specification
-of behavior.
+several techniques for composing SLM reaction networks (i.e., concatentation,
+branch-join, feedback, scale) for which we derive the transfer
+function of the composition; and
+\item
+an algorithm for designing a system whose time course is described
+by a transfer function.
 \end{itemize}
+We note that our techniques for 
 
 \begin{enumerate}
 \item
@@ -225,23 +256,40 @@ retroactivity
 \section{Methods}\label{methods}
 \begin{enumerate}
 \item
+Transfer functions and rational polynomials.
+\item
 Motivation: 
 Arbitrary real-valued functions can be approximated by a fourier transform,
 and the fourier transform is a subset of the Laplace Transform (where the real part is 0).
 \item
 This analysis is limited to SISO and transfer functions that
 are rational polynomials of $s$ with real coefficients.
-\item
-Evaluations: (a) can approximate complex simulations; (b) composed models have predictable transfer functions.
-\item
-Create a {\em sufficient} set of operations such that can
-approximate complex simulations.
 \end{enumerate}
 
 
 
 \section{Results}\label{results}
-\subsection{Modular Reaction Networks}
+\subsection{SISO Linear Modular (SLM) Reaction Networks}
+A SLM reaction network is a collection of reactions with:
+(a) linear kinetics,
+(b) an input species,
+(c) and output species,
+(d) only interacts with other reaction networks through
+its input and output species.
+Modules are composed by having the outputs of some networks be the
+same species as the inputs to other networks.
+
+A SISO modular reaction network has two requirements:
+\begin{enumerate}
+\item
+{\em Information hiding.} Only the input and output species are known outside the SMRN. That is, arbitrary changes can be made
+to the other species and to the reactions inside the SMRN as long as there is no change in the time course behavior of the MRN.
+\item
+{\em Interface dynamics.} Sufficient information is provided about the dynamics of the input and output species {\em within} the SMRN so
+that the time course behavior of these species
+can be adjusted as a result of {\em external} changes to the input and output species.
+\end{enumerate}
+Note that knowing interface dynamics allows us to compensate for retroactivity.
 
 We use subscripted and superscripted $S$ to indicate chemical species. Where there is no confusion, we use the same symbol for its concentration as well. In contexts where there may be confusion between the name and its concentration, we explicitly indicate a concentration using square brackets. For example, $[S_0]$ is the concentration of species $S_0$.
 
@@ -275,7 +323,7 @@ capital letter superscript.
 For example, for network $A$, we have the 5-tuple
 $<\mathcal{R}^A, S^A_I, S^A_O, k^A_I, k^A_O>$.
 
-\subsubsection{Sequential Reaction Network}
+\subsubsection{Sequential SLM Reaction Network}
 
 We start with a sequential network with $N$ stages.
 There are $N$ stages with an input and output. The input is $S_0$ and the output is $S_N$. Formally, we have
@@ -340,7 +388,7 @@ Transfer function of the {\em concatenate} operation.
 $$G(s) = G^A(s) G^B(s)\frac{s + k^A_O}{s+ k^B_I + k^A_O}$$.
 
 %%%%%%%%%%%%%%%%%
-\subsubsection{Branchjoin}
+\subsubsection{Branch-join}
 \begin{figure}
          \centering
          \includegraphics[scale=0.3]{figures/branchjoin.png}
@@ -393,7 +441,7 @@ S^B_O
    & = & \frac{k_{1b}}{s + k^B_I} \frac{s + k^B_O}{s + k^B_O + k_{2b}}  G^B(s) S_I (s) \nonumber \\
 S_O (s) & = & \frac{k_{2a} S^A_O(s) + k_{2b} S^B_O(s) }{s + k_3} \nonumber \\
 G(s) & = & \frac{k_{1a} k_{2a} (s + k^A_O) \beta(s) G^A(s) }{\alpha(s) \beta(s) (s + k_3)} \nonumber \\
-& & +  \frac{k_{1b}  k_{2b} (s + k^B_O)\alpha(s) G^B(s) }{\alpha(s) \beta(s) (s + k_3)} \\
+& & +  \frac{k_{1b}  k_{2b} (s + k^B_O)\alpha(s) G^B(s) }{\alpha(s) \beta(s) (s + k_3)} 
 \end{eqnarray}
 
 $\alpha(s) = (s + k^A_I) (s + k^A_O + k_{2a})$ and
@@ -427,28 +475,30 @@ $G(0) = m$.
 
 
 %%%%%%%%%%%%%%%%%
-\subsubsection{Loop}
+\subsubsection{Feedback}
 
 \begin{figure}
          \centering
-         \includegraphics[scale=0.4]{figures/loop.png}
-          \caption[]{Loop operation on network $A$.}
+         \includegraphics[scale=0.4]{figures/feedback.png}
+          \caption[]{Feedback operation on network $A$.}
          \label{fig:concatenate}
 \end{figure}
-{\bf Loop} is a unary operation.
-$loop(A, S_I, S_O, k_1, k_2, k)$ is a unary operation that produces
+{\bf Feedback} is a unary operation.
+$feedback(A, S_I, S_O, k_1, k_2, k_3, k_4, k_5)$ is a unary operation that produces
 the SLRN:
 \begin{itemize}
 \item $S_I$ is a new species.
 \item $S_O$ is a new species.
 \item $\mathcal{R} = \mathcal{R}^A \bigcup$ the following
-\begin{itemize}
-\item $S_I \xrightarrow{k_1} S^A_I$
-\item $S^A_O \xrightarrow{k} S_I$
-\item $S^A_O \xrightarrow{k_2} S_O$
-\end{itemize}
-\item $k_I = k^A_I$
-\item $k_O = k^A_O + k$
+\begin{enumerate}
+\item $S_I \xrightarrow{k_1} X_I$
+\item $X_I \xrightarrow{k_2} S^A_I$
+\item $S^A_O \xrightarrow{k_3} S_O$
+\item $S_O \xrightarrow{k_4} \emptyset$
+\item $S_O \xrightarrow{k_5} X_I$
+\end{enumerate}
+\item $k_I = k_1$
+\item $k_O = k_4 + k_5$
 \end{itemize}
 
 The following are the state equations of this system.
@@ -462,9 +512,9 @@ X_I(s) & = & \frac{k_5 S_O(s) + k_1 S_I (s)}{s + k_2} \\
 S^A_O(s) & = & S^A_I(s) G^A(s) \frac{s + k^A_O}{s + k^A_O + k_3}
 \end{eqnarray}
 We manipulate the state equations to derive the transfer function of
-the loop operation.
+the feedback operation.
 This analysis is contained in
-Fig.~\ref{fig:loop-derivation}
+Fig.~\ref{fig:feedback-derivation}
 
 \begin{figure*}
 \begin{eqnarray}
@@ -481,9 +531,9 @@ S_O & = &  \frac{k_2 k_3  G^{\prime}(s) X_I(s)}{s + k_4 + k_5  }  \nonumber \\
     \nonumber \\
 S_O & = &  \frac{k_1 k_2 k_3  G^{\prime}(s) S_I(s)}{(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 G^{\prime}(s)} \nonumber \nonumber \\
 H(s) & = & \frac{k_1 k_2 k_3  G^{\prime}(s)}{(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
-    & = & \frac{k_1 k_2 k_3  (s + k^A_O) G^A(s)}{(s + k^A_O + k_3)(s + k^A_I)(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 (s + k^A_O)G(s)}
+    & = & \frac{k_1 k_2 k_3  (s + k^A_O) G^A(s)}{(s + k^A_O + k_3)(s + k^A_I)(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 (s + k^A_O)G^A(s)}
 \end{eqnarray}
-\caption{Loop derivations}\label{fig:loop-derivation}
+\caption{Feedback derivations}\label{fig:feedback-derivation}
 \end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%

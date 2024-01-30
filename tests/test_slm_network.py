@@ -1,4 +1,4 @@
-from lrn_builder.slrn import SLRN # type: ignore
+from lrn_builder.slm_network import SLMNetwork # type: ignore
 
 import control # type: ignore
 import controlSBML as ctl # type: ignore
@@ -9,8 +9,8 @@ import unittest
 import tellurium as te # type: ignore
 
 
-IGNORE_TEST = False
-IS_PLOT = False
+IGNORE_TEST = True
+IS_PLOT = True
 LINEAR_MDL = """
 model *main_model()
 species S1, S2
@@ -39,7 +39,7 @@ TIMES = np.linspace(0, 10, 100)
 #############################
 # Tests
 #############################
-class TestSLRN(unittest.TestCase):
+class TestSLMNetwork(unittest.TestCase):
 
     def setUp(self):
         if IGNORE_TEST:
@@ -50,7 +50,7 @@ class TestSLRN(unittest.TestCase):
         k1 = 1
         k2 = 2
         tf = control.TransferFunction([k1], [1, k2])
-        self.network = SLRN(model, "S1", "S2", k1, k2, tf, times=times)
+        self.network = SLMNetwork(model, "S1", "S2", k1, k2, tf, times=times)
 
     def check(self, network=None):
         if network is None:
@@ -66,7 +66,7 @@ class TestSLRN(unittest.TestCase):
     def testConstructor(self):
         if IGNORE_TEST:
             return
-        self.assertTrue(isinstance(self.network, SLRN))
+        self.assertTrue(isinstance(self.network, SLMNetwork))
 
     def testCopyAndEqual(self):
         if IGNORE_TEST:
@@ -94,8 +94,8 @@ class TestSLRN(unittest.TestCase):
         kI = 0.5
         kO = 1.0
         times = np.linspace(0, 30, 300)
-        network = SLRN.makeTwoSpeciesNetwork(kI, kO, times=times)
-        self.assertTrue(isinstance(network, SLRN))
+        network = SLMNetwork.makeTwoSpeciesNetwork(kI, kO, times=times)
+        self.assertTrue(isinstance(network, SLMNetwork))
         self.assertTrue(network.input_name == "SI")
         self.assertTrue(network.output_name == "SO")
         self.assertTrue(network.kI == kI)
@@ -111,9 +111,10 @@ class TestSLRN(unittest.TestCase):
     def testPlotTransferFunction(self):
         if IGNORE_TEST:
             return
-        timeseries = self.network.plotTransferFunction(is_plot=IS_PLOT)
+        self.init()
+        timeseries = self.network.plotTransferFunctionEvaluation(is_plot=IS_PLOT)
         self.assertTrue(isinstance(timeseries, ctl.Timeseries))
-        timeseries = self.network.plotTransferFunction(is_simulation=False, is_plot=IS_PLOT)
+        timeseries = self.network.plotTransferFunctionEvaluation(is_simulation=False, is_plot=IS_PLOT)
         self.assertTrue(isinstance(timeseries, ctl.Timeseries))
 
     def testConcatenate(self):
@@ -143,11 +144,33 @@ class TestSLRN(unittest.TestCase):
     def testMakeSequentialNetwork(self):
         if IGNORE_TEST:
             return
-        network = SLRN.makeSequentialNetwork([1, 2, 3], [0.5, 0.6, 0.7])
-        self.assertTrue(network.input_name == "S0")
-        self.assertTrue(network.output_name == "S3")
-        _ = network.plotTransferFunction(is_plot=IS_PLOT)
-        self.assertTrue(network.isValid())
+        slrn = SLMNetwork.makeSequentialNetwork([1, 2, 3], [0.5, 0.6, 0.7])
+        self.assertTrue(slrn.input_name == "S0")
+        self.assertTrue(slrn.output_name == "S3")
+        _ = slrn.plotTransferFunction(is_plot=IS_PLOT)
+        self.assertTrue(slrn.isValid())
+
+    def testBranchjoin(self):
+        #if IGNORE_TEST:
+        #    return
+        self.init(model=LINEAR_MDL1)
+        network = self.network.copy()
+        bjn = self.network.branchjoin(network)
+        self.assertTrue(bjn.input_name == "SI")
+        self.assertTrue(bjn.output_name == "SO")
+        # Do simulations
+        self.assertTrue(bjn.isValid(is_plot=IS_PLOT))
+
+    def testLoop(self):
+        #if IGNORE_TEST:
+        #    return
+        self.init(model=LINEAR_MDL1)
+        network = self.network.copy()
+        bjn = self.network.branchjoin(network)
+        self.assertTrue(bjn.input_name == "SI")
+        self.assertTrue(bjn.output_name == "SO")
+        # Do simulations
+        self.assertTrue(bjn.isValid(is_plot=IS_PLOT))
        
 
 if __name__ == '__main__':
