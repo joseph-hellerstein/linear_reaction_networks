@@ -151,8 +151,8 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(slrn.isValid())
 
     def testBranchjoin(self):
-        #if IGNORE_TEST:
-        #    return
+        if IGNORE_TEST:
+            return
         self.init(model=LINEAR_MDL1)
         network = self.network.copy()
         bjn = self.network.branchjoin(network)
@@ -161,16 +161,16 @@ class TestSLMNetwork(unittest.TestCase):
         # Do simulations
         self.assertTrue(bjn.isValid(is_plot=IS_PLOT))
 
-    def testLoop(self):
+    # Problem is worse with larger k3 and/or k5
+    def testFeedback(self):
         #if IGNORE_TEST:
         #    return
         self.init(model=LINEAR_MDL1)
-        network = self.network.copy()
-        bjn = self.network.branchjoin(network)
-        self.assertTrue(bjn.input_name == "SI")
-        self.assertTrue(bjn.output_name == "SO")
+        fbn = self.network.feedback(k5=100)
+        self.assertTrue(fbn.input_name == "SI")
+        self.assertTrue(fbn.output_name == "SO")
         # Do simulations
-        self.assertTrue(bjn.isValid(is_plot=IS_PLOT))
+        self.assertTrue(fbn.isValid(is_plot=IS_PLOT))
        
 
 if __name__ == '__main__':

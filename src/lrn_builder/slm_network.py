@@ -263,7 +263,8 @@ class SLMNetwork(object):
         last_frc = (timeseries[SIMULATION].values[-1] - timeseries[SIMULATION].values[-1])/timeseries[SIMULATION].values[-1]
         if is_plot:
             _ = self.plotTransferFunctionEvaluation(is_plot=is_plot)
-        return (rmse/std < 0.01) or (last_frc < 0.01)
+        #return (rmse/std < 0.01) or (last_frc < 0.01)
+        return rmse/std < 0.01
     
     ################# NETWORK CONSTRUCTION ###############
     @classmethod
@@ -422,7 +423,7 @@ class SLMNetwork(object):
                               children=[self, other])
         return network
     
-    def loop(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1)->"SLMNetwork":
+    def feedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1)->"SLMNetwork":
         """
         Creates a new network by creating a feedback loop around the existing network.
 
@@ -451,7 +452,6 @@ class SLMNetwork(object):
             k5 = %f
             """ % (submodel1,  self.input_name, self.output_name,
                    k1, k2, k3, k4, k5)
-        import pdb; pdb.set_trace()
         s = control.TransferFunction.s
         numr = k1*k2*k3*(s + self.kO)*self.transfer_function
         denom = (s + self.kO + k3)*(s + self.kI)*(s + k4 + k5)*(s + k2)
@@ -459,6 +459,8 @@ class SLMNetwork(object):
         transfer_function = numr/denom
         # FIXME: -- handle operating region
         operating_region = self.operating_region
+        kI = k1
+        kO = k4 + k5
         network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function,
                               operating_region=operating_region, times=self.times,
                               children=[self])

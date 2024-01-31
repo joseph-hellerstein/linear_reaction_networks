@@ -282,10 +282,13 @@ same species as the inputs to other networks.
 A SISO modular reaction network has two requirements:
 \begin{enumerate}
 \item
-{\em Information hiding.} Only the input and output species are known outside the SMRN. That is, arbitrary changes can be made
-to the other species and to the reactions inside the SMRN as long as there is no change in the time course behavior of the MRN.
+{\em Information hiding.} Only the input and output species are known
+outside the SLM network. That is, arbitrary changes can be made
+to the other species and to the reactions inside the SLM nework
+as long as there is no change in the time course behavior of the SLM network.
+
 \item
-{\em Interface dynamics.} Sufficient information is provided about the dynamics of the input and output species {\em within} the SMRN so
+{\em Interface dynamics.} Sufficient information is provided about the dynamics of the input and output species {\em within} the SLM network so
 that the time course behavior of these species
 can be adjusted as a result of {\em external} changes to the input and output species.
 \end{enumerate}
@@ -521,7 +524,7 @@ Fig.~\ref{fig:feedback-derivation}
 s S_O (s) & = & k_3   G^A(s) \frac{s + k^A_O}{ s + k^A_O + k_3}  S^A_I(s) - (k_4  + k_5) S_O (s) \nonumber \\
 & = &
   k_2 k_3  G(s) \frac{s + k^A_O}{(s + k^A_O + k_3)(s + k^A_I)} X_I(s)
-   -(k_4 S + k_5 )S_O (s) \nonumber \\
+   -(k_4 + k_5 )S_O (s) \nonumber \\
 & = &
 k_2 k_3  G^{\prime}(s)X_I(s) - (k_4 + k_5) S_O(s)  \nonumber \\
 S_O & = &  \frac{k_2 k_3  G^{\prime}(s) X_I(s)}{s + k_4 + k_5  }  \nonumber \\
@@ -533,6 +536,8 @@ S_O & = &  \frac{k_1 k_2 k_3  G^{\prime}(s) S_I(s)}{(s + k_4 + k_5)(s + k_2) + k
 H(s) & = & \frac{k_1 k_2 k_3  G^{\prime}(s)}{(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 G^{\prime}(s)} \nonumber \\
     & = & \frac{k_1 k_2 k_3  (s + k^A_O) G^A(s)}{(s + k^A_O + k_3)(s + k^A_I)(s + k_4 + k_5)(s + k_2) + k_2 k_3 k_5 (s + k^A_O)G^A(s)}
 \end{eqnarray}
+$G^{\prime} (s) = 
+  G(s) \frac{s + k^A_O}{(s + k^A_O + k_3)(s + k^A_I)}$.
 \caption{Feedback derivations}\label{fig:feedback-derivation}
 \end{figure*}
 
