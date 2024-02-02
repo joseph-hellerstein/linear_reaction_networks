@@ -223,18 +223,11 @@ class TestSLMNetwork(unittest.TestCase):
         ntf = NamedTransferFunction("XI", "SAI", tf)
         df, score = ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
         self.assertTrue(score > 0.95)
-        # SI -> XI
+        # SI, S) -> XI
         SI_tf = (rr["k5"])/(s + rr["k2"])
-        SI_ntf = NamedTransferFunction("SI", "XI", SI_tf)
-        SI_df, _ = SI_ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
-        # SO -> XI
         SO_tf = (rr["k1"])/(s + rr["k2"])
-        SO_ntf = NamedTransferFunction("SO", "XI", SO_tf)
-        SO_df, _ = SO_ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
-        df = SO_df.copy()
-        df["prediction"] = SO_df["prediction"] + SI_df["prediction"]
-        diff = df["prediction"] - df["simulation"]
-        score = 1 - np.sqrt(np.sum(diff**2))/len(diff)
+        ntf = NamedTransferFunction(["SI", "SO"], "XI", [SI_tf, SO_tf])
+        df, score = ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
         self.assertTrue(score > 0.95)
        
 

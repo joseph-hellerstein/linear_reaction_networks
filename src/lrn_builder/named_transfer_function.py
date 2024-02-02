@@ -1,4 +1,4 @@
-'''Container for control.TransferFunction and common methods.'''
+'''Container for control.TransferFunction and common methods. Extension to MISO transfer functions.'''
 
 import control # type: ignore
 import matplotlib.pyplot as plt
@@ -20,29 +20,43 @@ TITLE = "title"
 
 
 class NamedTransferFunction(object):
-    def __init__(self, input_name:str, output_name:str, transfer_function:control.TransferFunction):
+    def __init__(self, input_name:Union[str, List[str]], output_name:str,
+                 transfer_function:Union[control.TransferFunction, List[control.TransferFunction]]):
         """
 
         Args:
-            input_name (str): name of the input variable
+            input_name (str, list-str): name(s) of the input variable
             output_name (str): name of the output variable
-            transfer_function (control.TransferFunction)
+            transfer_function (control.TransferFunction, list-control.TransferFunction): transfer function(s
         """
-        self.input_name = input_name
+        if isinstance(input_name, str):
+            input_name = [input_name]
+        self.input_names = input_name
         self.output_name = output_name
-        self.transfer_function = transfer_function
+        if isinstance(transfer_function, control.TransferFunction):
+            transfer_function = [transfer_function]
+        self.transfer_functions = transfer_function
 
     def __repr__(self):
-        return f"NamedTransferFunction({self.input_name}, {self.output_name}, {self.transfer_function})"
+        stg = "%s = " % self.output_name
+        terms = []
+        for idx, input_name in enumerate(self.input_names):
+            tf_stg = str(self.transfer_functions[idx])
+            terms.append(f"{tf_stg}{input_name}")
+        stg += " + ".join(terms)
+        return stg
     
     def __eq__(self, other:object) -> bool:
         if isinstance(other, NamedTransferFunction):
-            return self.input_name == other.input_name  \
-                and self.output_name == other.output_name and self.transfer_function == other.transfer_function
+            return self.input_names == other.input_names  \
+                and self.output_name == other.output_name and self.transfer_functions == other.transfer_functions
         return False
     
     def copy(self):
-        return NamedTransferFunction(self.input_name, self.output_name, self.transfer_function)
+        return NamedTransferFunction(self.input_names, self.output_name, self.transfer_functions)
+    
+    def _getInputColumn(self, input_name:str)->str:
+        return "%s__%s" % (INPUT, input_name)
     
     def simulate(self, model:str, times:Optional[List]=TIMES)->pd.DataFrame:
         """
@@ -57,16 +71,17 @@ class NamedTransferFunction(object):
                 TIME, INPUT, SIMULATION
         """
         rr = te.loada(model)
-        selections = [TIME, self.input_name, self.output_name]
+        selections = [TIME, self.output_name]
+        selections.extend(self.input_names)
         rr.selections = selections
         data = rr.simulate(times[0], times[-1], len(times), selections=selections)   # type: ignore
         df = pd.DataFrame(data, columns=data.colnames)
         columns = [c[1:-1] if c[0] == '[' else c for c in df.columns]
-        df[INPUT] = df[self.input_name]
+        for input_name in self.input_names:
+            column = self._getInputColumn(input_name)
+            df[column] = df[input_name]
+            del df[input_name]
         df[SIMULATION] = df[self.output_name]
-        for column in columns:
-            if not column in [TIME, INPUT, SIMULATION]:
-                del df[column]
         return df
 
     def predict(self, data:Union[pd.DataFrame, str], times:Optional[List]=TIMES)->pd.DataFrame:
@@ -91,9 +106,12 @@ class NamedTransferFunction(object):
             df = self.simulate(data, times=times)
         else:
             df = data
-        uvals = df[INPUT].values
-        _, predictions = control.forced_response(self.transfer_function, T=df[TIME], U=uvals)
-        df[PREDICTION] = predictions
+        miso_predictions = np.zeros(len(df.index))
+        for idx, transfer_function in enumerate(self.transfer_functions):
+            column = self._getInputColumn(self.input_names[idx])
+            _, predictions = control.forced_response(transfer_function, T=df[TIME], U=df[column].values)
+            miso_predictions += predictions
+        df[PREDICTION] = miso_predictions
         return df
 
     def score(self, model:str, times:Optional[List]=TIMES, **kwargs)->float:
@@ -158,7 +176,8 @@ class NamedTransferFunction(object):
             if TITLE in kwargs.keys():
                 title = kwargs[TITLE]
             else:
-                title = "%s->%s" % (self.input_name, self.output_name)
+                reactant_str = "+".join(self.input_names)
+                title = "%s->%s" % (reactant_str, self.output_name)
             ax.set_title(title)
             plt.show()
         return df, score
