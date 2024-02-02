@@ -42,10 +42,19 @@ class TestNamedTransferFunction(unittest.TestCase):
             return
         self.assertTrue(isinstance(repr(self.ntf), str))
 
+    def testEq(self):
+        if IGNORE_TEST:
+            return
+        ntf = self.ntf.copy()
+        self.assertTrue(self.ntf == ntf)
+        transfer_function = control.TransferFunction([1], [1, 3])
+        ntf = NamedTransferFunction("S1", "S2", transfer_function)
+        self.assertFalse(self.ntf == ntf)
+
     def testSimulate(self):
         if IGNORE_TEST:
             return
-        df = self.ntf._simulate(LINEAR_MDL, TIMES)
+        df = self.ntf.simulate(LINEAR_MDL, TIMES)
         diff = set(["time", "simulation", "input"]) - set(df.columns)
         self.assertEqual(len(diff), 0)
         self.assertTrue(isinstance(df, pd.DataFrame))
@@ -61,8 +70,8 @@ class TestNamedTransferFunction(unittest.TestCase):
     def testVerify(self):
         if IGNORE_TEST:
             return
-        result = self.ntf.verify(LINEAR_MDL, TIMES, is_plot=IS_PLOT)
-        self.assertTrue(result)
+        score = self.ntf.score(LINEAR_MDL, TIMES, is_plot=IS_PLOT)
+        self.assertGreater(score, 0.95)
 
        
 

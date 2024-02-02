@@ -4,13 +4,14 @@ import control # type: ignore
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Tuple
 import tellurium as te # type: ignore
 
 
 AX = "ax"
 FIGSIZE = "figsize"
 INPUT = "input"
+IS_PLOT = "is_plot"
 PREDICTION = "prediction"
 SIMULATION = "simulation"
 TIME = "time"
@@ -34,7 +35,16 @@ class NamedTransferFunction(object):
     def __repr__(self):
         return f"NamedTransferFunction({self.input_name}, {self.output_name}, {self.transfer_function})"
     
-    def _simulate(self, model:str, times:Optional[List]=TIMES)->pd.DataFrame:
+    def __eq__(self, other:object) -> bool:
+        if isinstance(other, NamedTransferFunction):
+            return self.input_name == other.input_name  \
+                and self.output_name == other.output_name and self.transfer_function == other.transfer_function
+        return False
+    
+    def copy(self):
+        return NamedTransferFunction(self.input_name, self.output_name, self.transfer_function)
+    
+    def simulate(self, model:str, times:Optional[List]=TIMES)->pd.DataFrame:
         """
         Simulates the model using tellurium
 
@@ -78,15 +88,34 @@ class NamedTransferFunction(object):
                 PREDICTION
         """
         if isinstance(data, str):
-            df = self._simulate(data, times=times)
+            df = self.simulate(data, times=times)
         else:
             df = data
         uvals = df[INPUT].values
         _, predictions = control.forced_response(self.transfer_function, T=df[TIME], U=uvals)
         df[PREDICTION] = predictions
         return df
-    
-    def verify(self, model:str, times:Optional[List]=TIMES, is_plot:bool=False, **kwargs)->bool:
+
+    def score(self, model:str, times:Optional[List]=TIMES, **kwargs)->float:
+        """
+        Scores the accuracy of the transfer function based on the fraction of step predictions < 0.01.
+
+        Args:
+            model (str): Antimony model
+            times (Optional[List], optional): Times for predictions
+            kwargs (dict):
+                is_plot: bool (Plot the results)
+                initial_value: float (Initial value for the staircase)
+                final_value: float (Initial value for the staircase)
+                num_step: int (Initial value for the staircase)
+
+        Returns:
+            float (0 <= score <= 1)
+        """
+        _, score = self.evaluate(model, times=times, **kwargs)
+        return score
+
+    def evaluate(self, model:str, times:Optional[List]=TIMES, frc_dev=0.01, **kwargs)->Tuple[pd.DataFrame, float]:
         """
         Checks the predictions against the data.
 
@@ -96,19 +125,28 @@ class NamedTransferFunction(object):
             kwargs (dict): Additional arguments for plotting
 
         Returns:
-            bool
+            pd.DataFrame: Columns
+                TIME: times for predictions
+                INPUT
+                SIMULATION: simulation of the output
+                PREDICTION
         """
+        if not IS_PLOT in kwargs.keys():
+            kwargs[IS_PLOT] = False
+        is_plot = kwargs[IS_PLOT]
+        #
         df = self.predict(model, times=times)
         simulations = df[SIMULATION].values
         predictions = df[PREDICTION].values
         # Check that the output is monotonic
-        rmse = np.sqrt(np.sum(simulations - predictions)**2)   # type: ignore
-        std = np.std(simulations)   # type: ignore
+        errs = np.array([np.abs(s - p)/s for s, p in zip(simulations, predictions) if not np.isclose(s, 0)])
+        score = np.sum(errs <= frc_dev)/len(errs)
         if is_plot:
             if AX in kwargs.keys():
                 ax = kwargs[AX]
-            elif not FIGSIZE in kwargs.keys():
-                kwargs[FIGSIZE] = [5,5]
+            else:
+                if not FIGSIZE in kwargs.keys():
+                    kwargs[FIGSIZE] = [5,5]
                 _, ax = plt.subplots(1, figsize=kwargs[FIGSIZE])
             ax.scatter(simulations, predictions, color="red", marker="*")
             ax.set_xlabel(SIMULATION)
@@ -123,4 +161,4 @@ class NamedTransferFunction(object):
                 title = "%s->%s" % (self.input_name, self.output_name)
             ax.set_title(title)
             plt.show()
-        return rmse/std < 0.1
+        return df, score

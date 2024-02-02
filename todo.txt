@@ -1,1 +1,1 @@
-getAntimony() includes const for input
+NamedTransferFunction can have multiple inputs.

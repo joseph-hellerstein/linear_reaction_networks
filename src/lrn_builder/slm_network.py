@@ -6,8 +6,8 @@ Usage:
 
 """
 from lrn_builder.antimony_template import AntimonyTemplate
+from lrn_builder.named_transfer_function import NamedTransferFunction
 from lrn_builder import constants as cn
-from lrn_builder import util
 
 import control  # type: ignore
 import controlSBML as ctl # type: ignore
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tellurium as te # type: ignore
-from typing import List, Optional
+from typing import List, Optional, Union
 
 
 DEFAULT_OPERATION_REGION = list(np.linspace(0, 10, 5))
@@ -34,7 +34,8 @@ class SLMNetwork(object):
     """
 
     def __init__(self, antimony_str:str, input_name:str, output_name:str, kI:float, kO:float,
-                 transfer_function:control.TransferFunction, operating_region: List[float]=DEFAULT_OPERATION_REGION,
+                 transfer_function:Union[control.TransferFunction, NamedTransferFunction],
+                 operating_region: List[float]=DEFAULT_OPERATION_REGION,
                  children:Optional[List["SLMNetwork"]]=None, times:List[float]=DEFAULT_TIMES):
         """
         Args:
@@ -53,7 +54,10 @@ class SLMNetwork(object):
         self.output_name = output_name
         self.kI = kI
         self.kO = kO
-        self.transfer_function = transfer_function
+        # FIXME: NamedTransferFunction
+        if isinstance(transfer_function, control.TransferFunction):
+            transfer_function = NamedTransferFunction(input_name, output_name, transfer_function)
+        self.named_transfer_function = transfer_function
         self.operating_region = operating_region
         if children is None:
             children = []
@@ -86,7 +90,7 @@ class SLMNetwork(object):
         is_true = is_true and (self.kO == other.kO)
         if not is_true and IS_DEBUG:
             print("**Failed 5") 
-        is_true = is_true and (self.transfer_function == other.transfer_function)
+        is_true = is_true and (self.named_transfer_function == other.named_transfer_function)
         if not is_true and IS_DEBUG:
             print("**Failed 6") 
         is_true = is_true and (self.operating_region == other.operating_region)
@@ -106,7 +110,7 @@ class SLMNetwork(object):
             SLMNetwork
         """
         network = SLMNetwork(self.template.original_antimony, self.input_name, self.output_name, self.kI, self.kO,  # type: ignore
-                           self.transfer_function, self.operating_region, self.children, self.times)
+                           self.named_transfer_function, self.operating_region, self.children, self.times)
         network.template = self.template.copy()
         return network
 
@@ -177,94 +181,33 @@ class SLMNetwork(object):
         result = ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step, **kwargs)
         return result
     
-    def plotTransferFunctionEvaluation(self, is_simulation:bool=True, is_transfer_function:bool=True,
-                             **kwargs)->ctl.Timeseries:
+    def isValid(self, score_threshold:float=0.95, **kwargs)->bool:
         """
         Compares the transfer function output to the simulation output for a staircase input.
         Args:
-            is_simulation: if True, then plot simulations
-            is_transfer_function: if True, then plot transfer function
-            kwargs: plot options
-        Returns:
-            ctl.Timeseries: Columns
-                output_name: output from the network
-                SIMULATION: simulation output
-                PREDICTION: prediction from the transfer function
-        """
-        if is_simulation and (not is_transfer_function):
-            is_this_plot = True
-        else:
-            is_this_plot = False
-        if not IS_PLOT in kwargs.keys():
-            kwargs[IS_PLOT] = True
-        is_plot = kwargs[IS_PLOT]
-        kwargs[IS_PLOT] = False
-        timeseries, _ = self.plotStaircaseResponse(times=self.times, **kwargs)
-        plt.close()  # Don't show the staircase
-        if is_this_plot:
-            return timeseries
-        # Other plots
-        if is_transfer_function:
-            column_name = "%s_staircase" % self.input_name
-            uvals = timeseries[column_name].values
-            _, predictions = control.forced_response(self.transfer_function, T=self.times, U=uvals)
-        # Plots
-        if not FIGSIZE in kwargs.keys():
-            kwargs[FIGSIZE] = [5,5]
-        _, ax = plt.subplots(1, figsize=kwargs[FIGSIZE])
-        if is_simulation and is_transfer_function:
-            simulations = timeseries[self.output_name].values
-            ax.scatter(simulations, predictions, color="red", marker="*")
-            ax.set_xlabel(SIMULATION)
-            ax.set_ylabel(PREDICTION)
-            max_simulated = np.max(simulations)
-            max_predictions = np.max(predictions)
-            max_value = max(max_simulated, max_predictions)
-            ax.plot([0, max_value], [0, max_value], linestyle="--")
-        elif (not is_simulation) and is_transfer_function:
-            ax.scatter(self.times, predictions, marker="o")
-            ax.set_xlabel(cn.TIME)
-            ax.set_ylabel(PREDICTION)
-        else:
-            raise ValueError("Must specify is_simulation and/or is_transfer_function")
-        timeseries[PREDICTION] = predictions
-        timeseries[SIMULATION] = timeseries[self.output_name]
-        if "title" in kwargs.keys():
-            title = kwargs["title"]
-        else:
-            title = ""
-        ax.set_title(title)
-        if is_plot:
-            plt.show()
-        else:
-            plt.close()
-        return timeseries
-    
-    def isValid(self, is_plot=False, **kwargs)->bool:
-        """
-        Compares the transfer function output to the simulation output for a staircase input.
-        Args:
+            score_threshold: threshold for the fraction of absolute errors < 0.01
             kwargs: Staircase options
         Returns:
             bool: True if the network is valid
         """
-        try:
-            new_kwargs = dict(kwargs)
-            if not IS_PLOT in new_kwargs.keys():
-                new_kwargs[IS_PLOT] = False
-            timeseries =  self.plotTransferFunctionEvaluation(**new_kwargs)
-        except Exception as e:
-            print(e)
-            import pdb; pdb.set_trace()
-            return False
-        # Check that the output is monotonic
-        rmse = np.sqrt(np.sum((timeseries[SIMULATION] -  timeseries[PREDICTION])**2))
-        std = np.std(timeseries[SIMULATION])
-        last_frc = (timeseries[SIMULATION].values[-1] - timeseries[SIMULATION].values[-1])/timeseries[SIMULATION].values[-1]
-        if is_plot:
-            _ = self.plotTransferFunctionEvaluation(is_plot=is_plot)
-        #return (rmse/std < 0.01) or (last_frc < 0.01)
-        return rmse/std < 0.01
+        antimony_model = str(self.getStaircaseAntimony(**kwargs))
+        return self.named_transfer_function.score(antimony_model, **kwargs) >= score_threshold
+    
+    def getStaircaseAntimony(self, **kwargs)->str:
+        """
+        Provides the antimony used to construct a staircase response.
+        Args:
+            kwargs: Staircase options
+        Returns:
+            str (Antimony model)
+        """
+        new_kwargs = dict(kwargs)
+        new_kwargs[IS_PLOT] = False
+        if not "times" in new_kwargs:
+            new_kwargs["times"] = self.times
+        _, builder = self.plotStaircaseResponse(**new_kwargs)
+        return builder
+
     
     ################# NETWORK CONSTRUCTION ###############
     @classmethod
@@ -364,7 +307,9 @@ class SLMNetwork(object):
             SI is A.%s
             SO is B.%s
             """ % (submodel1, submodel2, self.output_name, other.input_name, self.input_name, other.output_name)
-        transfer_function = self.transfer_function*other.transfer_function*control.TransferFunction(
+        self_tf = self.named_transfer_function.transfer_function
+        other_tf = other.named_transfer_function.transfer_function
+        transfer_function = self_tf*other_tf*control.TransferFunction(
             [1, self.kO], [1, self.kO + other.kI])
         network = SLMNetwork(model, "SI", "SO", self.kI, other.kO, transfer_function,
                               operating_region=self.operating_region, times=self.times,
@@ -408,12 +353,14 @@ class SLMNetwork(object):
             """ % (submodel1,  submodel2, self.input_name, other.input_name,
                    self.output_name, other.output_name, k1a, k1b, k2a, k2b, k3)
         # Calculate the transfer function of the composition
+        tf = self.named_transfer_function.transfer_function
+        other_tf = other.named_transfer_function.transfer_function
         s = control.TransferFunction.s
         alpha_tf = (s + self.kI)*(s + self.kO + k2a)
         beta_tf = (s + other.kI)*(s + other.kO + k2b)
-        numr1 = k1a*k2a*(s + self.kO)*beta_tf*self.transfer_function
+        numr1 = k1a*k2a*(s + self.kO)*beta_tf*tf
         denom = alpha_tf*beta_tf*(s + k3)
-        numr2 = k1b*k2b*(s + other.kO)*alpha_tf*other.transfer_function
+        numr2 = k1b*k2b*(s + other.kO)*alpha_tf*other_tf
         transfer_function = (numr1 + numr2) / denom
         kI = self.kI + other.kI
         kO = k3
@@ -423,9 +370,9 @@ class SLMNetwork(object):
                               children=[self, other])
         return network
     
-    def feedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1)->"SLMNetwork":
+    def pfeedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1)->"SLMNetwork":
         """
-        Creates a new network by creating a feedback loop around the existing network.
+        Creates a new network by creating a positive feedback loop around the existing network.
 
         Args:
             k1: (float) kinetic constant for converting SI into XI
@@ -453,9 +400,9 @@ class SLMNetwork(object):
             """ % (submodel1,  self.input_name, self.output_name,
                    k1, k2, k3, k4, k5)
         s = control.TransferFunction.s
-        numr = k1*k2*k3*(s + self.kO)*self.transfer_function
+        numr = k1*k2*k3*(s + self.kO)*self.named_transfer_function.transfer_function
         denom = (s + self.kO + k3)*(s + self.kI)*(s + k4 + k5)*(s + k2)
-        denom += k2*k3*k5*(s + self.kO)*self.transfer_function
+        denom += k2*k3*k5*(s + self.kO)*self.named_transfer_function.transfer_function
         transfer_function = numr/denom
         # FIXME: -- handle operating region
         operating_region = self.operating_region

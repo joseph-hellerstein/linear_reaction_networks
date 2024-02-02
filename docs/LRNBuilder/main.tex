@@ -478,7 +478,7 @@ $G(0) = m$.
 
 
 %%%%%%%%%%%%%%%%%
-\subsubsection{Feedback}
+\subsubsection{Positive Feedback}
 
 \begin{figure}
          \centering
@@ -507,12 +507,12 @@ the SLRN:
 The following are the state equations of this system.
 \begin{eqnarray}
 s S_O (s) & = & k_3 S^A_O (s) - (k_4 + k_5) S_O \nonumber \\
-S_O & = & \frac{k_3 S^A_O(s)}{s + k_4 + k_5} \\
 s S^A_I(s) & = & k_2 X_I(s) - k^A_I S^A_I(s) \nonumber \\
-S^A_I(s) & = & \frac{k_2 X_I(s)}{s + k^A_I} \\
 s X_I (s) & = & k_5 S_O(s) + k_1 S_I (s) - k_2 X_I (s) \nonumber \\
-X_I(s) & = & \frac{k_5 S_O(s) + k_1 S_I (s)}{s + k_2} \\
-S^A_O(s) & = & S^A_I(s) G^A(s) \frac{s + k^A_O}{s + k^A_O + k_3}
+S_O & = & \frac{k_3 }{s + k_4 + k_5} S^A_O(s) \\
+S^A_O(s) & = & \frac{s + k^A_O}{s + k^A_O + k_3} G^A(s) S^A_I(s) \\
+S^A_I(s) & = & \frac{k_2 }{s + k^A_I} X_I(s) \\
+X_I(s) & = & \frac{k_5 }{s + k_2} S_O(s) + \frac{k_1}{s + k_2} S_I (s) \\
 \end{eqnarray}
 We manipulate the state equations to derive the transfer function of
 the feedback operation.
