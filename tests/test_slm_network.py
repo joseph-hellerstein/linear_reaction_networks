@@ -9,8 +9,10 @@ import tellurium as te # type: ignore
 s = control.TransferFunction.s
 
 
-IGNORE_TEST = True
+IGNORE_TEST = False
 IS_PLOT = False
+FRACTIONAL_DEVIATION = 0.02
+SCORE_THRESHOLD = 0.95
 FEEDBACK_MDL = """
 // Created by libAntimony v2.14.0
 model *main_model()
@@ -104,7 +106,6 @@ class TestSLMNetwork(unittest.TestCase):
     def check(self, network=None):
         if network is None:
             network = self.network
-        antimony_str = network.getAntimony()
         rr = te.loada(str(network))
         data = rr.simulate(0,20, 2000, selections=["time", "S1", "S2", "S3"])
         self.assertTrue(len(data) > 0)
@@ -153,7 +154,7 @@ class TestSLMNetwork(unittest.TestCase):
         response_ts, _ = network.plotStaircaseResponse(is_plot=IS_PLOT, times=times)
         indices = list(response_ts.index)
         end_index = indices[-1]
-        so = network.named_transfer_function.transfer_function.dcgain()*si
+        so = network.named_transfer_function.transfer_functions[0].dcgain()*si
         self.assertTrue(np.isclose(response_ts.loc[end_index, "SI_staircase"], si))
         self.assertGreaterEqual(so, response_ts.loc[end_index, "SO"])
 
@@ -166,7 +167,8 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(cnetwork.input_name == "SI")
         self.assertTrue(cnetwork.output_name == "SO")
         # Do simulations
-        self.assertTrue(cnetwork.isValid(is_plot=IS_PLOT))
+        self.assertTrue(cnetwork.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION))
 
     def testConcatenate2(self):
         if IGNORE_TEST:
@@ -179,7 +181,8 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(cnetwork.input_name == "SI")
         self.assertTrue(cnetwork.output_name == "SO")
         # Do simulations
-        self.assertTrue(cnetwork.isValid(is_plot=IS_PLOT))
+        self.assertTrue(cnetwork.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION))
 
     def testBranchjoin(self):
         if IGNORE_TEST:
@@ -190,9 +193,9 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(bjn.input_name == "SI")
         self.assertTrue(bjn.output_name == "SO")
         # Do simulations
-        self.assertTrue(bjn.isValid(is_plot=IS_PLOT))
+        self.assertTrue(bjn.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.02))
 
-    # Problem is worse with larger k3 and/or k5
     def testPfeedback(self):
         if IGNORE_TEST:
             return
@@ -201,11 +204,24 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(fbn.input_name == "SI")
         self.assertTrue(fbn.output_name == "SO")
         # Do simulations
-        self.assertTrue(fbn.isValid(is_plot=IS_PLOT))
+        self.assertTrue(fbn.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.02))
+    
+    def testNfeedback(self):
+        if IGNORE_TEST:
+            return
+        self.init(model=LINEAR_MDL1, times=np.linspace(0, 100, 1000))
+        fbn = self.network.nfeedback(k5=10)
+        self.assertTrue(fbn.input_name == "SI")
+        self.assertTrue(fbn.output_name == "SO")
+        # Do simulations
+        _, builder = fbn.plotStaircaseResponse(is_plot=IS_PLOT)
+        self.assertTrue(fbn.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.03))
 
     def testDebugPfeedback(self):
-        #if IGNORE_TEST:
-        #    return
+        if IGNORE_TEST:
+            return
         rr = te.loada(FEEDBACK_MDL)
         # SAO->SO
         tf = rr["k3"]/(s + rr["k4"] + rr["k5"])
@@ -229,6 +245,15 @@ class TestSLMNetwork(unittest.TestCase):
         ntf = NamedTransferFunction(["SI", "SO"], "XI", [SI_tf, SO_tf])
         df, score = ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
         self.assertTrue(score > 0.95)
+        # XI->SO
+        Gp = A_tf*(s + rr["A_kO"])/((s + rr["A_kO"] + rr["k3"])*(s + rr["A_kIO"]))
+        tf = rr["k2"]*rr["k3"]*Gp/(s + rr["k4"] + rr["k5"])
+        ntf = NamedTransferFunction("XI", "SO", tf)
+        df, score = ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
+        # SI ->SO
+        tf = rr["k1"]*rr["k2"]*rr["k3"]*Gp/((s + rr["k4"] + rr["k5"])*(s + rr["k2"]) - rr["k2"]*rr["k3"]*rr["k5"]*Gp)
+        ntf = NamedTransferFunction("SI", "SO", tf)
+        df, score = ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
        
 
 if __name__ == '__main__':

@@ -165,7 +165,7 @@ class SLMNetwork(object):
             initial_value: initial value of the input
             final_value: final value of the input
             num_step: number of steps in the staircase
-            kwargs: plot options
+            kwargs: plot options and times options
         Returns:
             tuple[ctl.Timeseries, ctl.AntimonyBuilder]
             
@@ -176,22 +176,41 @@ class SLMNetwork(object):
             final_value = self.operating_region[-1]
         if num_step is None:
             num_step = len(self.operating_region)
+        new_kwargs = self._setTimes(kwargs)
+        #
         ctlsb = ctl.ControlSBML(self.getAntimony(), input_names=[self.input_name], output_names=[self.output_name],
                                 is_fixed_input_species=True)
-        result = ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step, **kwargs)
+        result = ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step,
+                                             **new_kwargs)
         return result
     
-    def isValid(self, score_threshold:float=0.95, **kwargs)->bool:
+    def isValid(self, score_threshold:float=0.95, fractional_deviation:float=0.01, **kwargs)->bool:
         """
         Compares the transfer function output to the simulation output for a staircase input.
         Args:
-            score_threshold: threshold for the fraction of absolute errors < 0.01
+            score_threshold: threshold for the fraction of absolute errors < fractional_deviation
+            fractional_deviation: fractional deviation
             kwargs: Staircase options
         Returns:
             bool: True if the network is valid
         """
-        antimony_model = str(self.getStaircaseAntimony(**kwargs))
-        return self.named_transfer_function.score(antimony_model, **kwargs) >= score_threshold
+        new_kwargs = self._setTimes(kwargs)
+        antimony_model = str(self.getStaircaseAntimony(**new_kwargs))
+        score = self.named_transfer_function.score(antimony_model, fractional_deviation=fractional_deviation, **new_kwargs)
+        return score >= score_threshold
+    
+    def _setTimes(self, kwargs)->dict:
+        """
+        Constructs a dictionary with the default times if it is not specified.
+        Args:
+            times: times for the simulation
+        Returns:
+            dict
+        """
+        new_kwargs = dict(kwargs)
+        if not cn.TIMES in new_kwargs.keys():
+            new_kwargs[cn.TIMES] = self.times
+        return new_kwargs
     
     def getStaircaseAntimony(self, **kwargs)->str:
         """
@@ -201,13 +220,10 @@ class SLMNetwork(object):
         Returns:
             str (Antimony model)
         """
-        new_kwargs = dict(kwargs)
+        new_kwargs = self._setTimes(kwargs)
         new_kwargs[IS_PLOT] = False
-        if not "times" in new_kwargs:
-            new_kwargs["times"] = self.times
         _, builder = self.plotStaircaseResponse(**new_kwargs)
         return builder
-
     
     ################# NETWORK CONSTRUCTION ###############
     @classmethod
@@ -235,16 +251,19 @@ class SLMNetwork(object):
         return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
     
     @classmethod
-    def makeSequentialNetwork(cls, ks:List[float], kps:[float],
-                              operating_region=DEFAULT_OPERATION_REGION)->"SLMNetwork":
+    def makeSequentialNetwork(cls, ks:List[float], kps:[float], **kwargs)->"SLMNetwork":
         """
         Creates a sequential network of length len(kIs) = len(kOs). kI = kIs[0]; kO = kOs[-1].
+        The input name is S1 and the output is S{len(kIs)}.
         Args:
-            input_name: input species to the network
-            output_name: output species from the network
             model_reference: reference in a form that can be read by Tellurium
             ks: Rate at whcih Species n produces Species n+1 (n < N)
             kps: Rates which Species n is degraded (n > 0)
+            input_name: input species to the network
+            output_name: output species from the network
+            kwargs (dict): additional arguments for constructor
+        Returns:
+            SLMNetwork
         """
         if len(ks) != len(kps):
             raise ValueError("kIs and kOs must be the same length")
@@ -274,11 +293,11 @@ class SLMNetwork(object):
         output_name = "S%d" % len(ks)
         kI = ks[0]
         kO = kps[-1]
-        return cls(model_str, "S0", output_name, kI, kO, transfer_function)
+        return cls(model_str, "S0", output_name, kI, kO, transfer_function, **kwargs)
     
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
-                    operating_region=DEFAULT_OPERATION_REGION)->"SLMNetwork":
+                    **kwargs)->"SLMNetwork":
         """
         Args:
             input_name: input species to the network
@@ -290,11 +309,12 @@ class SLMNetwork(object):
         raise NotImplementedError("Must implement")
 
     ################# NETWORK OPERATIONS ###############
-    def concatenate(self, other:"SLMNetwork")->"SLMNetwork":
+    def concatenate(self, other:"SLMNetwork", **kwargs)->"SLMNetwork":
         """
         Creates a new network that is the concatenation of this network and another.
         Args:
             other: SLMNetwork
+            kwargs: additional arguments for constructor
         Returns:
             SLMNetwork
         """
@@ -307,17 +327,17 @@ class SLMNetwork(object):
             SI is A.%s
             SO is B.%s
             """ % (submodel1, submodel2, self.output_name, other.input_name, self.input_name, other.output_name)
-        self_tf = self.named_transfer_function.transfer_function
-        other_tf = other.named_transfer_function.transfer_function
+        self_tf = self.named_transfer_function.transfer_functions[0]
+        other_tf = other.named_transfer_function.transfer_functions[0]
         transfer_function = self_tf*other_tf*control.TransferFunction(
             [1, self.kO], [1, self.kO + other.kI])
         network = SLMNetwork(model, "SI", "SO", self.kI, other.kO, transfer_function,
-                              operating_region=self.operating_region, times=self.times,
-                              children=[self, other])
+                              children=[self, other], **kwargs)
         return network
 
     # FIXME: Do I have the correct operating region? 
-    def branchjoin(self, other:"SLMNetwork", k1a:float=1, k1b:float=1, k2a:float=1, k2b:float=1, k3:float=1)->"SLMNetwork":
+    def branchjoin(self, other:"SLMNetwork", k1a:float=1, k1b:float=1, k2a:float=1, k2b:float=1, k3:float=1,
+                   **kwargs)->"SLMNetwork":
         """
         Creates a new network by combining this network and another in parallel.
         Args:
@@ -327,6 +347,7 @@ class SLMNetwork(object):
             k2a: (float) Module A -> SO
             k2b: (float) Module B -> SO
             k3: (float) SO -> emptyset
+            kwargs: additional arguments for constructor
         Returns:
             SLMNetwork
         """
@@ -353,8 +374,8 @@ class SLMNetwork(object):
             """ % (submodel1,  submodel2, self.input_name, other.input_name,
                    self.output_name, other.output_name, k1a, k1b, k2a, k2b, k3)
         # Calculate the transfer function of the composition
-        tf = self.named_transfer_function.transfer_function
-        other_tf = other.named_transfer_function.transfer_function
+        tf = self.named_transfer_function.transfer_functions[0]
+        other_tf = other.named_transfer_function.transfer_functions[0]
         s = control.TransferFunction.s
         alpha_tf = (s + self.kI)*(s + self.kO + k2a)
         beta_tf = (s + other.kI)*(s + other.kO + k2b)
@@ -364,13 +385,11 @@ class SLMNetwork(object):
         transfer_function = (numr1 + numr2) / denom
         kI = self.kI + other.kI
         kO = k3
-        operating_region = list(np.array(self.operating_region) + np.array(other.operating_region))
         network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function,
-                              operating_region=operating_region, times=self.times,
-                              children=[self, other])
+                              children=[self, other], **kwargs)
         return network
     
-    def pfeedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1)->"SLMNetwork":
+    def pfeedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1, **kwargs)->"SLMNetwork":
         """
         Creates a new network by creating a positive feedback loop around the existing network.
 
@@ -380,6 +399,9 @@ class SLMNetwork(object):
             k3: (float) kinetic constant for converting self.SO into SO
             k4: (float) kinetic constant for degrading SO
             k5: (float) kinetic constant for converting self.SO into XI
+            kwargs: additional arguments for constructor
+        Returns:
+            SLMNetwork
         """
         submodel1 = self.template.makeSubmodelTemplateName(1)
         model = """
@@ -400,20 +422,71 @@ class SLMNetwork(object):
             """ % (submodel1,  self.input_name, self.output_name,
                    k1, k2, k3, k4, k5)
         s = control.TransferFunction.s
-        numr = k1*k2*k3*(s + self.kO)*self.named_transfer_function.transfer_function
+        numr = k1*k2*k3*(s + self.kO)*self.named_transfer_function.transfer_functions[0]
         denom = (s + self.kO + k3)*(s + self.kI)*(s + k4 + k5)*(s + k2)
-        denom += k2*k3*k5*(s + self.kO)*self.named_transfer_function.transfer_function
+        denom -= k2*k3*k5*(s + self.kO)*self.named_transfer_function.transfer_functions[0]
         transfer_function = numr/denom
         # FIXME: -- handle operating region
         operating_region = self.operating_region
         kI = k1
         kO = k4 + k5
         network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function,
-                              operating_region=operating_region, times=self.times,
-                              children=[self])
+                              children=[self], **kwargs)
         return network
     
-    def amplify(self, k1, k2)->"SLMNetwork":
+
+    def nfeedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1,
+                  **kwargs)->"SLMNetwork":
+        """
+        Creates a new network by creating a positive feedback loop around the existing network.
+
+        Args:
+            k1: (float) kinetic constant for converting SI into XI
+            k2: (float) kinetic constant for converting XI into self.SI
+            k3: (float) kinetic constant for converting self.SO into SO
+            k4: (float) kinetic constant for degrading SO
+            k5: (float) kinetic constant for degrading XI
+            kwargs: additional arguments for constructor
+        Returns:
+            SLMNetwork
+        """
+        submodel1 = self.template.makeSubmodelTemplateName(1)
+        model = """
+            A: %s();
+            species SI, SO
+            SAI is A.%s
+            SAO is A.%s
+            SI -> XI; k1*SI
+            XI -> SAI; k2*XI
+            SAO -> SO; k3*SAO
+            SO -> ; k4*SO
+            XI -> ; k5*SO
+            k1 = %f
+            k2 = %f
+            k3 = %f
+            k4 = %f
+            k5 = %f
+            """ % (submodel1,  self.input_name, self.output_name,
+                   k1, k2, k3, k4, k5)
+        s = control.TransferFunction.s
+        self_tf = self.named_transfer_function.transfer_functions[0]
+        Gp = self_tf*(s + self.kO)/((s + self.kO + k3)*(s + self.kI))
+        numr = k1*k2*k3*Gp
+        #numr = k1*k2*k3*(s + self.kO)*self.named_transfer_function.transfer_functions[0]
+        #denom = (s + self.kO + k3)*(s + self.kI)*(s + k4)*(s + k2)
+        #denom += k2*k3*k5*(s + self.kO)*self.named_transfer_function.transfer_functions[0]
+        denom = (s + k4)*(s + k2) + k2*k3*k5*Gp
+        transfer_function = numr/denom
+        # FIXME: -- handle operating region
+        operating_region = self.operating_region
+        kI = k1
+        kO = k4
+        network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function,
+                              children=[self], **kwargs)
+        return network
+    
+    
+    def scale(self, k1, k2, **kwargs)->"SLMNetwork":
         """
         Creates a new network by amplifying the output of the current network. Let N.SI be the input species to the
         current network and N.SO be the output species from the current network. The new network will have the following reactions

@@ -4,3 +4,4 @@ TE_SUB_MODEL_NAME = "<<submodel_name__%d>>"
 
 # Constant names
 TIME = "time"
+TIMES = "times"

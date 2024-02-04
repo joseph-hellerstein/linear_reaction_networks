@@ -76,7 +76,6 @@ class NamedTransferFunction(object):
         rr.selections = selections
         data = rr.simulate(times[0], times[-1], len(times), selections=selections)   # type: ignore
         df = pd.DataFrame(data, columns=data.colnames)
-        columns = [c[1:-1] if c[0] == '[' else c for c in df.columns]
         for input_name in self.input_names:
             column = self._getInputColumn(input_name)
             df[column] = df[input_name]
@@ -133,13 +132,15 @@ class NamedTransferFunction(object):
         _, score = self.evaluate(model, times=times, **kwargs)
         return score
 
-    def evaluate(self, model:str, times:Optional[List]=TIMES, frc_dev=0.01, **kwargs)->Tuple[pd.DataFrame, float]:
+    def evaluate(self, model:str, times:Optional[List]=TIMES, fractional_deviation:float=0.01,
+                 **kwargs)->Tuple[pd.DataFrame, float]:
         """
         Checks the predictions against the data.
 
         Args:
             model (str): Antimony model
             times (Optional[List], optional): Times for predictions
+            fractional_deviation (float, optional): Fractional deviation for the score (default=0.01)
             kwargs (dict): Additional arguments for plotting
 
         Returns:
@@ -158,7 +159,9 @@ class NamedTransferFunction(object):
         predictions = df[PREDICTION].values
         # Check that the output is monotonic
         errs = np.array([np.abs(s - p)/s for s, p in zip(simulations, predictions) if not np.isclose(s, 0)])
-        score = np.sum(errs <= frc_dev)/len(errs)
+        if len(errs) == 0:
+            errs = np.array([np.isclose(s, p) for s, p in zip(simulations, predictions)])
+        score = np.sum(errs <= fractional_deviation)/len(errs)
         if is_plot:
             if AX in kwargs.keys():
                 ax = kwargs[AX]
@@ -177,7 +180,7 @@ class NamedTransferFunction(object):
                 title = kwargs[TITLE]
             else:
                 reactant_str = "+".join(self.input_names)
-                title = "%s->%s" % (reactant_str, self.output_name)
+                title = "%s->%s, score (fdev): %1.2f (%1.2f)" % (reactant_str, self.output_name, score, fractional_deviation)
             ax.set_title(title)
             plt.show()
-        return df, score
+        return df, float(score)
