@@ -16,19 +16,21 @@ import lrn_builder.constants as cn
 
 import re
 import tellurium as te # type: ignore
-from typing import Optional, List
+from typing import Optional, List, Union
 
 DEFAULT_MODEL_NAME = "main_model"
 
 
 class AntimonyTemplate():
 
-    def __init__(self, antimony: str):
+    def __init__(self, antimony: Union[str, object]):
         """
         Args:
-            antimony: Antimony string
+            antimony: Antimony string or roadrunner
         """
         # Find the main module
+        if "roadrunner" in str(type(antimony)):
+            antimony = antimony.getCurrentAntimony()   # type: ignore
         self.original_antimony = antimony
         self.substituted_antimony = ""
         self.model_name = ""
@@ -70,7 +72,7 @@ class AntimonyTemplate():
         """
         NULL_MODEL_NAME = ""
         # Finds the name of the top level model
-        antimony_strs: List[str] = self.original_antimony.split("\n")
+        antimony_strs: List[str] = self.original_antimony.split("\n")   # type: ignore
         main_model_line = ""
         name_pos = -1
         for line in antimony_strs:

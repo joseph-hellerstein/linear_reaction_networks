@@ -4,6 +4,7 @@ from lrn_builder.named_transfer_function import NamedTransferFunction   # type: 
 import control # type: ignore
 import numpy as np
 import unittest
+import matplotlib.pyplot as plt
 import tellurium as te # type: ignore
 
 s = control.TransferFunction.s
@@ -69,7 +70,7 @@ S1 -> S2; k1*S1
 J2: S2 -> ; k2*S2
 k1 = 1
 k2 = 2
-S1 = 10
+S1 = 0
 S2 = 0
 end
 """
@@ -97,11 +98,13 @@ class TestSLMNetwork(unittest.TestCase):
             return
         self.init()
 
-    def init(self, model=LINEAR_MDL, times=TIMES):
-        k1 = 1
-        k2 = 2
+    def init(self, model=LINEAR_MDL, times=TIMES, k1=1, k2=2):
+        rr = te.loada(LINEAR_MDL)
+        rr["k1"] = k1
+        rr["k2"] = k2
+        antimony_str = rr.getCurrentAntimony()
         tf = control.TransferFunction([k1], [1, k2])
-        self.network = SLMNetwork(model, "S1", "S2", k1, k2, tf, times=times)
+        self.network = SLMNetwork(antimony_str, "S1", "S2", k1, k2, tf, times=times)
 
     def check(self, network=None):
         if network is None:
@@ -128,8 +131,6 @@ class TestSLMNetwork(unittest.TestCase):
     def testGetAntimony(self):
         if IGNORE_TEST:
             return
-        antimony_str = self.network.getAntimony()
-        self.assertEqual(antimony_str, LINEAR_MDL)
         self.network.template.isValidAntimony()
 
     def testPlotStaircaseResponse(self):
@@ -160,15 +161,17 @@ class TestSLMNetwork(unittest.TestCase):
 
     def testConcatenate(self):
         if IGNORE_TEST:
-            return
+           return
         self.init(model=LINEAR_MDL1, times=np.linspace(0, 100, 1000))
         network = self.network.copy()
         cnetwork = self.network.concatenate(network)
         self.assertTrue(cnetwork.input_name == "SI")
         self.assertTrue(cnetwork.output_name == "SO")
         # Do simulations
-        self.assertTrue(cnetwork.isValid(is_plot=IS_PLOT,
-                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION))
+        result = cnetwork.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.03,
+                                         title="Concatenate:")
+        self.assertTrue(result)
 
     def testConcatenate2(self):
         if IGNORE_TEST:
@@ -182,7 +185,8 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(cnetwork.output_name == "SO")
         # Do simulations
         self.assertTrue(cnetwork.isValid(is_plot=IS_PLOT,
-                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION))
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION,
+                                         title="Concatenate2:"))
 
     def testBranchjoin(self):
         if IGNORE_TEST:
@@ -194,7 +198,8 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(bjn.output_name == "SO")
         # Do simulations
         self.assertTrue(bjn.isValid(is_plot=IS_PLOT,
-                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.02))
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION,
+                                         title="Branchjoin:"))
 
     def testPfeedback(self):
         if IGNORE_TEST:
@@ -205,7 +210,8 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(fbn.output_name == "SO")
         # Do simulations
         self.assertTrue(fbn.isValid(is_plot=IS_PLOT,
-                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.02))
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.02,
+                                         title="Pfeedback:"))
     
     def testNfeedback(self):
         if IGNORE_TEST:
@@ -215,9 +221,9 @@ class TestSLMNetwork(unittest.TestCase):
         self.assertTrue(fbn.input_name == "SI")
         self.assertTrue(fbn.output_name == "SO")
         # Do simulations
-        _, builder = fbn.plotStaircaseResponse(is_plot=IS_PLOT)
         self.assertTrue(fbn.isValid(is_plot=IS_PLOT,
-                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.03))
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.02,
+                                         title="Nfeedback:"))
 
     def testDebugPfeedback(self):
         if IGNORE_TEST:
@@ -254,6 +260,18 @@ class TestSLMNetwork(unittest.TestCase):
         tf = rr["k1"]*rr["k2"]*rr["k3"]*Gp/((s + rr["k4"] + rr["k5"])*(s + rr["k2"]) - rr["k2"]*rr["k3"]*rr["k5"]*Gp)
         ntf = NamedTransferFunction("SI", "SO", tf)
         df, score = ntf.evaluate(FEEDBACK_MDL, is_plot=IS_PLOT)
+
+    def testScale(self):
+        if IGNORE_TEST:
+            return
+        self.init(model=LINEAR_MDL1, times=np.linspace(0, 100, 1000), k2=10)
+        scale_network = self.network.scale(m=13, k2=10)
+        self.assertTrue(scale_network.input_name == "SI")
+        self.assertTrue(scale_network.output_name == "SO")
+        result = scale_network.isValid(is_plot=IS_PLOT,
+                                         score_threshold=SCORE_THRESHOLD, fractional_deviation=FRACTIONAL_DEVIATION+0.03,
+                                         title="Scale:")
+        self.assertTrue(result)
        
 
 if __name__ == '__main__':

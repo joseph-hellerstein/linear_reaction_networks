@@ -132,15 +132,16 @@ class NamedTransferFunction(object):
         _, score = self.evaluate(model, times=times, **kwargs)
         return score
 
-    def evaluate(self, model:str, times:Optional[List]=TIMES, fractional_deviation:float=0.01,
+    def evaluate(self, model:str, times:Optional[List]=TIMES, fractional_deviation:float=0.01, is_debug:bool=False,
                  **kwargs)->Tuple[pd.DataFrame, float]:
         """
-        Checks the predictions against the data.
+        Checks the predictions against the data. If the title keyword is used and ends iwth ":", statistics are added.
 
         Args:
             model (str): Antimony model
             times (Optional[List], optional): Times for predictions
             fractional_deviation (float, optional): Fractional deviation for the score (default=0.01)
+            is_debug (bool, optional): Debug mode (plots the simulated and predicted values)
             kwargs (dict): Additional arguments for plotting
 
         Returns:
@@ -169,18 +170,26 @@ class NamedTransferFunction(object):
                 if not FIGSIZE in kwargs.keys():
                     kwargs[FIGSIZE] = [5,5]
                 _, ax = plt.subplots(1, figsize=kwargs[FIGSIZE])
-            ax.scatter(simulations, predictions, color="red", marker="*")
-            ax.set_xlabel(SIMULATION)
-            ax.set_ylabel(PREDICTION)
-            max_simulated = np.max(simulations)   # type: ignore
-            max_predictions = np.max(predictions)  # type: ignore
-            max_value = max(max_simulated, max_predictions)
-            ax.plot([0, max_value], [0, max_value], linestyle="--")
+            if is_debug:
+                ax.plot(df[TIME], simulations, color="blue", marker="o")
+                ax.plot(df[TIME], predictions, color="green", marker="o")
+                ax.legend(["simulation", "prediction"])
+            else: 
+                ax.scatter(simulations, predictions, color="red", marker="*")
+                ax.set_xlabel(SIMULATION)
+                ax.set_ylabel(PREDICTION)
+                max_simulated = np.max(simulations)   # type: ignore
+                max_predictions = np.max(predictions)  # type: ignore
+                max_value = max(max_simulated, max_predictions)
+                ax.plot([0, max_value], [0, max_value], linestyle="--")
+            reactant_str = "+".join(self.input_names)
+            tenatative_title = "%s->%s, score (fdev): %1.2f (%1.2f)" % (reactant_str, self.output_name, score, fractional_deviation)
             if TITLE in kwargs.keys():
-                title = kwargs[TITLE]
+                if kwargs[TITLE][-1] == ":":
+                    title = "%s %s" % (kwargs[TITLE], tenatative_title)
+                else:
+                    title = kwargs[TITLE]
             else:
-                reactant_str = "+".join(self.input_names)
-                title = "%s->%s, score (fdev): %1.2f (%1.2f)" % (reactant_str, self.output_name, score, fractional_deviation)
+                title = tenatative_title
             ax.set_title(title)
-            plt.show()
         return df, float(score)
