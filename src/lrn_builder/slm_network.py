@@ -199,7 +199,7 @@ class SLMNetwork(object):
         score = self.named_transfer_function.score(antimony_model, fractional_deviation=fractional_deviation, **new_kwargs)
         return score >= score_threshold
 
-    def debug(self, **kwargs)->Tuple[pd.DataFrame, str]:
+    def debug(self, **kwargs)->Tuple[pd.DataFrame, str, float]:
         """
         Provides information needed to debug a model
         Compares the transfer function output to the simulation output for a staircase input.
@@ -211,8 +211,8 @@ class SLMNetwork(object):
         """
         new_kwargs = self._setTimes(kwargs)
         antimony_model = str(self.getStaircaseAntimony(**new_kwargs))
-        df, _ = self.named_transfer_function.evaluate(antimony_model, **new_kwargs)
-        return df, antimony_model
+        df, score = self.named_transfer_function.evaluate(antimony_model, **new_kwargs)
+        return df, antimony_model, score
     
     def _setTimes(self, kwargs)->dict:
         """
@@ -266,7 +266,7 @@ class SLMNetwork(object):
         return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
     
     @classmethod
-    def makeSequentialNetwork(cls, ks:List[float], kps:[float], **kwargs)->"SLMNetwork":
+    def makeSequentialNetwork(cls, ks:List[float], kps:List[float], **kwargs)->"SLMNetwork":
         """
         Creates a sequential network of length len(kIs) = len(kOs). kI = kIs[0]; kO = kOs[-1].
         The input name is S1 and the output is S{len(kIs)}.
