@@ -1,3 +1,4 @@
+colour
 control
 controlSBML
 coverage
@@ -11,10 +12,12 @@ pandas
 pandas-stubs
 pylint
 nose2
+sbmlnetwork
 seaborn
 symmathSBML
 sympy
 tellurium
+toml
 twine
 # dependencies for controlSBML
 #tqdm

@@ -13,7 +13,7 @@ import control  # type: ignore
 import controlSBML as ctl # type: ignore
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+import pandas as pd # type: ignore
 import tellurium as te # type: ignore
 from typing import List, Optional, Union, Tuple
 
@@ -73,35 +73,35 @@ class SLMNetwork(object):
         is_true = True
         if not isinstance(other, SLMNetwork):
             if not is_true and IS_DEBUG:
-               print("**Failed 0") 
+               print("**Failed 0")
             return False
         is_true = self.template == other.template
         if not is_true and IS_DEBUG:
-            print("**Failed 1") 
+            print("**Failed 1")
         is_true = is_true and (self.input_name == other.input_name)
         if not is_true and IS_DEBUG:
-            print("**Failed 2") 
+            print("**Failed 2")
         is_true = is_true and (self.output_name == other.output_name)
         if not is_true and IS_DEBUG:
-            print("**Failed 3") 
+            print("**Failed 3")
         is_true = is_true and (self.kI == other.kI)
         if not is_true and IS_DEBUG:
-            print("**Failed 4") 
+            print("**Failed 4")
         is_true = is_true and (self.kO == other.kO)
         if not is_true and IS_DEBUG:
-            print("**Failed 5") 
+            print("**Failed 5")
         is_true = is_true and (self.named_transfer_function == other.named_transfer_function)
         if not is_true and IS_DEBUG:
-            print("**Failed 6") 
+            print("**Failed 6")
         is_true = is_true and (self.operating_region == other.operating_region)
         if not is_true and IS_DEBUG:
-            print("**Failed 7") 
+            print("**Failed 7")
         is_true = is_true and (self.children == other.children)
         if not is_true and IS_DEBUG:
-            print("**Failed 8") 
+            print("**Failed 8")
         is_true = is_true and (np.allclose(self.times, other.times))
         if not is_true and IS_DEBUG:
-            print("**Failed 9")              
+            print("**Failed 9")
         return is_true
 
     def copy(self)->"SLMNetwork":
@@ -168,7 +168,7 @@ class SLMNetwork(object):
             kwargs: plot options and times options
         Returns:
             tuple[ctl.Timeseries, ctl.AntimonyBuilder]
-            
+
         """
         if initial_value is None:
             initial_value = self.operating_region[0]
@@ -178,12 +178,12 @@ class SLMNetwork(object):
             num_step = len(self.operating_region)
         new_kwargs = self._setTimes(kwargs)
         #
-        ctlsb = ctl.ControlSBML(self.getAntimony(), input_names=[self.input_name], output_names=[self.output_name],
+        ctlsb = ctl.ControlSBML(self.getAntimony(), input_name=self.input_name, output_name=self.output_name,
                                 is_fixed_input_species=True)
         result = ctlsb.plotStaircaseResponse(initial_value=initial_value, final_value=final_value, num_step=num_step,
                                              **new_kwargs)
         return result
-    
+
     def isValid(self, score_threshold:float=0.95, fractional_deviation:float=0.01, **kwargs)->bool:
         """
         Compares the transfer function output to the simulation output for a staircase input.
@@ -213,7 +213,7 @@ class SLMNetwork(object):
         antimony_model = str(self.getStaircaseAntimony(**new_kwargs))
         df, score = self.named_transfer_function.evaluate(antimony_model, **new_kwargs)
         return df, antimony_model, score
-    
+
     def _setTimes(self, kwargs)->dict:
         """
         Constructs a dictionary with the default times if it is not specified.
@@ -226,7 +226,7 @@ class SLMNetwork(object):
         if not cn.TIMES in new_kwargs.keys():
             new_kwargs[cn.TIMES] = self.times
         return new_kwargs
-    
+
     def getStaircaseAntimony(self, **kwargs)->str:
         """
         Provides the antimony used to construct a staircase response.
@@ -239,7 +239,7 @@ class SLMNetwork(object):
         new_kwargs[IS_PLOT] = False
         _, builder = self.plotStaircaseResponse(**new_kwargs)
         return builder
-    
+
     ################# NETWORK CONSTRUCTION ###############
     @classmethod
     def makeTwoSpeciesNetwork(cls, kI:float, kO:float, **kwargs)->"SLMNetwork":
@@ -248,7 +248,7 @@ class SLMNetwork(object):
             input_name: input species to the network
             output_name: output species from the network
             model_reference: reference in a form that can be read by Tellurium
-            kI: Rate at which input is consumed 
+            kI: Rate at which input is consumed
             kO: Rate which output is cconsumed
             kwargs: additional arguments for constructor
         """
@@ -264,7 +264,7 @@ class SLMNetwork(object):
         """ % (MAIN_MODEL_NAME, kI, kO)
         transfer_function = control.TransferFunction([kI], [1, kO])
         return cls(model, "SI", "SO", kI, kO, transfer_function, **kwargs)
-    
+
     @classmethod
     def makeSequentialNetwork(cls, ks:List[float], kps:List[float], **kwargs)->"SLMNetwork":
         """
@@ -285,7 +285,7 @@ class SLMNetwork(object):
         model = """
             S%d -> S%d; k_%d*S%d
             S%d -> ; kp_%d*S%d
-            k_%d = %f 
+            k_%d = %f
             kp_%d = %f
             S%d = 0
             """
@@ -309,7 +309,7 @@ class SLMNetwork(object):
         kI = ks[0]
         kO = kps[-1]
         return cls(model_str, "S0", output_name, kI, kO, transfer_function, **kwargs)
-    
+
     @classmethod
     def makeCascade(cls, input_name:str, output_name:str, kIs:List[float], kOs:List[float],
                     **kwargs)->"SLMNetwork":
@@ -318,7 +318,7 @@ class SLMNetwork(object):
             input_name: input species to the network
             output_name: output species from the network
             model_references: references in a form that can be read by Tellurium
-            kIs: Rates at which input is consumed 
+            kIs: Rates at which input is consumed
             kOs: Rates which output is cconsumed
         """
         raise NotImplementedError("Must implement")
@@ -350,7 +350,7 @@ class SLMNetwork(object):
                               children=[self, other], **kwargs)
         return network
 
-    # FIXME: Do I have the correct operating region? 
+    # FIXME: Do I have the correct operating region?
     def branchjoin(self, other:"SLMNetwork", k1a:float=1, k1b:float=1, k2a:float=1, k2b:float=1, k3:float=1,
                    **kwargs)->"SLMNetwork":
         """
@@ -403,7 +403,7 @@ class SLMNetwork(object):
         network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function, times=self.times,
                               children=[self, other], **kwargs)
         return network
-    
+
     def pfeedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1, **kwargs)->"SLMNetwork":
         """
         Creates a new network by creating a positive feedback loop around the existing network.
@@ -448,7 +448,7 @@ class SLMNetwork(object):
         network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function, times=self.times,
                               children=[self], **kwargs)
         return network
-    
+
 
     def nfeedback(self, k1:float=1, k2:float=1, k3:float=1, k4:float=1, k5:float=1,
                   **kwargs)->"SLMNetwork":
@@ -495,7 +495,7 @@ class SLMNetwork(object):
         network = SLMNetwork(model, "SI", "SO", kI, kO, transfer_function, times=self.times,
                               children=[self], **kwargs)
         return network
-    
+
     def scale(self, m=1, k1=1, k2=1, **kwargs)->"SLMNetwork":
         """
         Creates a new network by amplifying the output of the current network. Adds the reactions
