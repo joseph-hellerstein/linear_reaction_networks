@@ -34,9 +34,9 @@ class SLMNetwork(object):
     """
 
     def __init__(self, antimony_str:str, input_name:str, output_name:str, kI:float, kO:float,
-                 transfer_function:Union[control.TransferFunction, NamedTransferFunction],
-                 operating_region: List[float]=DEFAULT_OPERATION_REGION,
-                 children:Optional[List["SLMNetwork"]]=None, times:List[float]=DEFAULT_TIMES):
+            transfer_function:Union[control.TransferFunction, NamedTransferFunction],
+            operating_region: List[float]=DEFAULT_OPERATION_REGION,
+            children:Optional[List["SLMNetwork"]]=None, times:List[float]=DEFAULT_TIMES):
         """
         Args:
             input_name: input species to the network
@@ -158,8 +158,8 @@ class SLMNetwork(object):
         return antimony_str
 
     def plotStaircaseResponse(self, initial_value:Optional[float]=None,
-                              final_value:Optional[float]=None, num_step:Optional[float]=None,
-                              **kwargs)->tuple[ctl.Timeseries, ctl.AntimonyBuilder]:
+            final_value:Optional[float]=None, num_step:Optional[float]=None,
+            **kwargs)->tuple[ctl.Timeseries, ctl.AntimonyBuilder]:
         """
         Args:
             initial_value: initial value of the input
