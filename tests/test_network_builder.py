@@ -1,8 +1,9 @@
-from lrn_builder.sequential_network_builder import makeSequentialAntimony  # type: ignore
+from lrn_builder.network_builder import NetworkBuilder  # type: ignore
 
 import unittest
 import tellurium as te  # type: ignore
-
+import numpy as np
+import sympy as sp  # type: ignore
 
 IGNORE_TEST = False
 
@@ -11,11 +12,12 @@ class TestMakeSequentialAntimony(unittest.TestCase):
 
     def setUp(self):
         self.num_stage = 3
+        self.builder = NetworkBuilder(self.num_stage)
 
     def testBasicStructure(self):
         if IGNORE_TEST:
             return
-        antimony_str = makeSequentialAntimony(self.num_stage)
+        antimony_str = self.builder.makeSequentialAntimony()
         self.assertIsInstance(antimony_str, str)
         self.assertIn("model *sequential_network()", antimony_str)
         self.assertIn("end", antimony_str)
@@ -24,7 +26,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         if IGNORE_TEST:
             return
         # Test that the generated Antimony can be loaded by Tellurium
-        antimony_str = makeSequentialAntimony(self.num_stage)
+        antimony_str = self.builder.makeSequentialAntimony()
         try:
             rr = te.loada(antimony_str)
             self.assertIsNotNone(rr)
@@ -34,7 +36,8 @@ class TestMakeSequentialAntimony(unittest.TestCase):
     def testSingleStage(self):
         if IGNORE_TEST:
             return
-        antimony_str = makeSequentialAntimony(1)
+        builder = NetworkBuilder(1)
+        antimony_str = builder.makeSequentialAntimony()
         
         # Should have 2 reactions: S0 -> S1 and S0 -> ;
         self.assertIn("S0 -> S1", antimony_str)
@@ -51,7 +54,8 @@ class TestMakeSequentialAntimony(unittest.TestCase):
     def testThreeStages(self):
         if IGNORE_TEST:
             return
-        antimony_str = makeSequentialAntimony(3)
+        builder = NetworkBuilder(3)
+        antimony_str = builder.makeSequentialAntimony()
         
         # Check reactions
         self.assertIn("S0 -> S1; k1*S0", antimony_str)
@@ -72,7 +76,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
     def testKineticConstants(self):
         if IGNORE_TEST:
             return
-        antimony_str = makeSequentialAntimony(self.num_stage)
+        antimony_str = self.builder.makeSequentialAntimony()
         
         # Load model and verify kinetic constant values
         rr = te.loada(antimony_str)
@@ -92,7 +96,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
     def testSpeciesCount(self):
         if IGNORE_TEST:
             return
-        antimony_str = makeSequentialAntimony(self.num_stage)
+        antimony_str = self.builder.makeSequentialAntimony()
         rr = te.loada(antimony_str)
         
         # Should have num_stage + 1 species (S0, S1, ..., S_num_stage)
@@ -107,7 +111,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
     def testReactionCount(self):
         if IGNORE_TEST:
             return
-        antimony_str = makeSequentialAntimony(self.num_stage)
+        antimony_str = self.builder.makeSequentialAntimony()
         rr = te.loada(antimony_str)
         
         # Should have 2 * num_stage reactions
@@ -120,17 +124,18 @@ class TestMakeSequentialAntimony(unittest.TestCase):
             return
         # Test that num_stage < 1 raises ValueError
         with self.assertRaises(ValueError):
-            makeSequentialAntimony(0)
+            _ = NetworkBuilder(0)  # Temporary valid builder
         
         with self.assertRaises(ValueError):
-            makeSequentialAntimony(-1)
+            _ = NetworkBuilder(-1)  # Temporary valid builder
 
     def testVariousStages(self):
         if IGNORE_TEST:
             return
         # Test that various numbers of stages work correctly
         for num_stage in [1, 2, 5, 10]:
-            antimony_str = makeSequentialAntimony(num_stage)
+            builder = NetworkBuilder(num_stage)
+            antimony_str = builder.makeSequentialAntimony()
             
             # Verify it's valid
             rr = te.loada(antimony_str)
@@ -150,7 +155,8 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         if IGNORE_TEST:
             return
         # Ensure kinetic constants are truly sequential (1, 2, 3, ...)
-        antimony_str = makeSequentialAntimony(5)
+        builder = NetworkBuilder(5)
+        antimony_str = builder.makeSequentialAntimony()
         rr = te.loada(antimony_str)
         
         for i in range(1, 11):  # 5 stages = 10 kinetic constants
@@ -161,8 +167,9 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         if IGNORE_TEST:
             return
         # Test that the model has the expected structure
-        antimony_str = makeSequentialAntimony(2)
-        
+        builder = NetworkBuilder(2)
+        antimony_str = builder.makeSequentialAntimony()
+
         # Split into lines for detailed checking
         lines = [line.strip() for line in antimony_str.split('\n') if line.strip()]
         
@@ -175,6 +182,24 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         # Should contain reaction lines
         reaction_lines = [line for line in lines if '->' in line]
         self.assertEqual(len(reaction_lines), 4)  # 2 stages * 2 reactions each
+
+    def testMakeSymbolicAMatrix(self):
+        #if IGNORE_TEST:
+        #    return
+        A_mat = np.array([[0, 1, 0], [0, 0, 1], [1, 1, 0]])
+        A_sym = self.builder.makeSymbolicAMatrix(A_mat)
+        # Check the shape
+        self.assertEqual(A_sym.shape, (3, 3))
+        # Verify that columns sum to 0
+        self.assertEqual(0, sum(sp.ones(1, A_sym.rows)*A_sym))
+        # Verify that entries are present where expected
+        nz_mat = A_mat != 0 + np.eye(A_mat.shape[0])
+        nz_sym = A_sym.applyfunc(lambda x: True if x != 0 else False)
+        for irow in range(A_mat.shape[0]):
+            for icol in range(A_mat.shape[1]):
+                self.assertEqual(nz_mat[irow, icol], nz_sym[irow, icol],
+                        f"Mismatch at ({irow}, {icol})")
+
 
 
 if __name__ == '__main__':
