@@ -1,14 +1,17 @@
 '''Builds a sequential network with a degradation reaction at each stage.'''
 
+from collections import namedtuple
 import numpy as np
+import pandas as pd # type: ignore
 import sympy as sp  # type: ignore
 import tellurium as te # type: ignore
-import pandas as pd # type: ignore
-from typing import Tuple, Optional
+from typing import Tuple, Union
 
 # Constants
-REACTANT_FACTOR = 100  # Factor used to name rate constant
-PRODUCT_FACTOR = 1   # Factor used to name rate constant
+REACTANT_FACTOR = 100  # Factor used to name rate constant (row in A matrix)
+PRODUCT_FACTOR = 1   # Factor used to name rate constant (column in A matrix)
+
+MakeSymbolicAMatResult = namedtuple("MakeSymbolicAMatResult", ["A_mat", "rate_dct"])
 
 
 
@@ -19,13 +22,14 @@ class NetworkBuilder(object):
             raise ValueError("num_species must be at least 1")
 
     @staticmethod
-    def _makeConstantName(reactant_index: int, product_index: int,
+    def _makeConstantName(product_index: int, reactant_index: int,
             constant_prefix: str = "k") -> str:
+        # Product index is the column; reactant index is the row
         num = (1+reactant_index)*REACTANT_FACTOR + (1 + product_index)*PRODUCT_FACTOR
         return f"{constant_prefix}{num}"
 
     @classmethod
-    def makeSymbolicAMatrix(cls, A_mat: np.ndarray, constant_prefix: str = "k") -> sp.Matrix:
+    def makeSymbolicAMat(cls, model: Union[str, np.ndarray], constant_prefix: str = "k") -> MakeSymbolicAMatResult:
         """
         Converts a numeric A matrix into a symbolic one using sympy symbols for the
         rate constants. The underlying system is assumed to have a single reactant
@@ -40,18 +44,27 @@ class NetworkBuilder(object):
             k{(1+j)*REACTANT_FACTOR + (1+i)*PRODUCT_FACTOR}
 
         Args:
-            numeric_A_matrix: Numeric A matrix (numpy ndarray)
+            model: Numeric A matrix (numpy ndarray) or Antimony model string
             constant_prefix: Prefix for the rate constant names
             
         Returns:
-            sympy.Matrix: Symbolic A matrix
+            MakeSymbolicAMatResult: Contains the symbolic A matrix and the rate constant dictionary
         """
+        if isinstance(model, np.ndarray):
+            A_mat = model
+        elif isinstance(model, str):
+            rr = te.loada(model)
+            A_mat = rr.getFullJacobian()
+        else:
+            raise TypeError("model must be a numpy ndarray or Antimony model string")
+
         num_row, num_col = A_mat.shape
         if num_row != num_col:
             raise ValueError("A matrix must be square")
         A_sym = sp.Matrix.zeros(num_row, num_col)
         diagonal_sym = sp.Matrix.zeros(num_row)  # Sum of each reaction in which i is a reactant
         # Convert off-diagonal elements to constants
+        rate_dct: dict = {}
         for irow in range(num_row):
             for icol in range(num_col):
                 value = A_mat[irow, icol]
@@ -66,16 +79,17 @@ class NetworkBuilder(object):
                 rate_constant_sym = sp.symbols(rate_constant_name)
                 diagonal_sym[icol] += rate_constant_sym
                 A_sym[irow, icol] = rate_constant_sym  # Reaction increases S_irow
+                rate_dct[rate_constant_name] = value
         # Set diagonal elements
         for i in range(num_row):
             A_sym[i, i] = -diagonal_sym[i]
         #
-        return A_sym
+        return MakeSymbolicAMatResult(A_mat=A_sym, rate_dct=rate_dct)
 
     def makeRandomNetwork(self,
                 prob_reaction: float,
                 kinetic_range: Tuple[float, float],
-                constant_prefix: str = "k") -> Tuple[str, sp.Matrix]:
+                constant_prefix: str = "k") -> Tuple[str, MakeSymbolicAMatResult]:
         """
         Generates a random Antimony model with a specified number of species and reactions.
         S1 is the input and so is a boundary species.
@@ -87,6 +101,7 @@ class NetworkBuilder(object):
 
         Returns:
             str: Random Antimony model string
+            MakeSymbolicAMatResult: Symbolic A matrix and rate constant dictionary
         """
         # Create a random A matrix
         A_mat = np.random.uniform(kinetic_range[0], kinetic_range[1],
@@ -105,7 +120,7 @@ class NetworkBuilder(object):
         for i in range(self.num_species):
             A_mat[i, i] = -np.sum(A_mat[:, i])
         # Make the result symbolic with the correct rate constant names
-        A_sym = self.makeSymbolicAMatrix(A_mat)
+        A_sym = self.makeSymbolicAMat(A_mat)
         # Make the Antimony model
         lines = []
         lines.append("model *random_network()")
@@ -129,15 +144,19 @@ class NetworkBuilder(object):
             lines.append(f"    {reactant_name} -> {product_name}; {rate_constant_name}*{reactant_name}")
         # Initialize species
         for species in set(specie_names):
-            lines.append(f"    {species} = 0")
+            if species == "S1":
+                lines.append(f"    $S1 = 1")
+            else:
+                lines.append(f"    {species} = 0")
         # Define rate constants
         for rate_constant in set(rate_constant_names):
             lines.append(f"    {rate_constant} = {np.random.uniform(*kinetic_range)}")
         # Complete the model
         lines.append("end")
         antimony_str = "\n".join(lines)
+        # Construct the symbolic A matrix
         # Return Antimony string and symbolic A matrix
-        return antimony_str, A_sym
+        return MakeSymbolicAMatResult(A_mat=A_sym, rate_dct=rate_dct)
 
     def makeSequentialAntimony(self) -> str:
         """
