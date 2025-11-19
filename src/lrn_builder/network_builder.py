@@ -1,8 +1,23 @@
 '''Builds a sequential network with a degradation reaction at each stage.'''
 
+"""
+Conventions for Antimony models.
+1. All reactions are either bounderies or uni-uni reactions.
+2. Species are named S{num}, where num is the species index starting at 1. S1 is a boundary species.
+3. Rate constants are named k{num}, where num is reactant_index + 100 * product_index. For
+    a degradation reaction, it is just the product index.
+
+Example:
+    -> S1; k100
+    S1 -> S2; k201*S1
+    S2 -> ; k2*S2
+    S2 -> S3; k302*S2
+"""
+
 from collections import namedtuple
 import numpy as np
 import pandas as pd # type: ignore
+from scipy import signal  # type: ignore
 import sympy as sp  # type: ignore
 import tellurium as te # type: ignore
 from typing import Tuple, Union
@@ -11,8 +26,8 @@ from typing import Tuple, Union
 REACTANT_FACTOR = 100  # Factor used to name rate constant (row in A matrix)
 PRODUCT_FACTOR = 1   # Factor used to name rate constant (column in A matrix)
 
-MakeSymbolicAMatResult = namedtuple("MakeSymbolicAMatResult", ["A_mat", "rate_dct"])
 
+MakeSymbolicAMatResult = namedtuple("MakeSymbolicAMatResult", ["A_sym", "rate_dct"])
 
 
 class NetworkBuilder(object):
@@ -20,6 +35,12 @@ class NetworkBuilder(object):
         self.num_species = num_species
         if self.num_species < 1:
             raise ValueError("num_species must be at least 1")
+        self.antimon_str = None
+        self.A_sym = None
+        self.A_mat = None
+        self.rate_dct = None # key is name, value is numeric rate constant
+        self.transfer_function = None
+        self.expression = None
 
     @staticmethod
     def _makeConstantName(product_index: int, reactant_index: int,
@@ -82,14 +103,17 @@ class NetworkBuilder(object):
                 rate_dct[rate_constant_name] = value
         # Set diagonal elements
         for i in range(num_row):
-            A_sym[i, i] = -diagonal_sym[i]
+            rate_constant_name = f"{constant_prefix}{1+i}"
+            rate_constant_sym = sp.symbols(rate_constant_name)
+            A_sym[i, i] = -diagonal_sym[i] - rate_constant_sym  # Degradation reaction
+            rate_dct[rate_constant_name] = A_mat[i, i]
         #
-        return MakeSymbolicAMatResult(A_mat=A_sym, rate_dct=rate_dct)
+        return MakeSymbolicAMatResult(A_sym=A_sym, rate_dct=rate_dct)
 
     def makeRandomNetwork(self,
                 prob_reaction: float,
                 kinetic_range: Tuple[float, float],
-                constant_prefix: str = "k") -> Tuple[str, MakeSymbolicAMatResult]:
+                constant_prefix: str = "k") -> None:
         """
         Generates a random Antimony model with a specified number of species and reactions.
         S1 is the input and so is a boundary species.
@@ -99,9 +123,12 @@ class NetworkBuilder(object):
             prob_reaction: Probability of a reaction between any two species
             kinetic_range: Tuple specifying the min and max values for kinetic constants
 
-        Returns:
-            str: Random Antimony model string
-            MakeSymbolicAMatResult: Symbolic A matrix and rate constant dictionary
+        Updates
+            self.antimon_str: Random Antimony model string
+            self.A_sym: Symbolic A matrix
+            self.A_mat: Numeric A matrix
+            self.rate_dct: Dictionary of rate constants
+            self.transfer_function:
         """
         # Create a random A matrix
         A_mat = np.random.uniform(kinetic_range[0], kinetic_range[1],
@@ -154,9 +181,17 @@ class NetworkBuilder(object):
         # Complete the model
         lines.append("end")
         antimony_str = "\n".join(lines)
-        # Construct the symbolic A matrix
+        # Construct the transfer function
+        A_sym = self.makeSymbolicAMat(A_mat, constant_prefix=constant_prefix).A_sym
+        expression = A_sym[0, self.num_species]
+        transfer_function = self.sympyToTransferFunction(expression)
         # Return Antimony string and symbolic A matrix
-        return MakeSymbolicAMatResult(A_mat=A_sym, rate_dct=rate_dct)
+        self.antimon_str = antimony_str
+        self.A_sym = A_sym
+        self.A_mat = A_mat
+        self.rate_dct = self.makeSymbolicAMat(A_mat,
+        return MakeRandomNetworkResult(antimony_str=antimony_str,
+                input_name="S1", output_name=f"S{self.num_species}", transfer_function=transfer_function)
 
     def makeSequentialAntimony(self) -> str:
         """
@@ -214,3 +249,56 @@ class NetworkBuilder(object):
         lines.append("end")
         
         return "\n".join(lines)
+
+    def makeTransferFunction(self, output_name : Optional[str] = None, **kwargs) -> signal.TransferFunction:
+        """
+        Uses the current symbolic A matrix to construct a transfer function from S1 to
+        the largest numbered species on output.
+        
+        Parameters:
+        -----------
+        output_name: Species number to output the transfer function for (default: largest numbered species)
+        kwargs: name-value pairs for parameters
+
+        Returns:
+        --------
+        signal.TransferFunction
+            Transfer function object
+        """
+        if self.A_sym is None:
+            raise ValueError("Symbolic A matrix is not defined")
+        if output_name is None:
+            output_name = self.A_mat.colnames[-1]
+        output_index = list(A_mat.colnames).index(output_name)
+        # Construct the transfer function
+        s, u = sp.symbols(["s", "u"])
+        # FIXME to size B
+        B = sp.Matrix([[1], [0], [0], [0], [0]])
+        I = sp.eye(self.A_sym.rows)
+        species_transform_vec = (s*I - self.A_sym).inv() * B
+        #
+        expr = self.species_transform_vec[output_index] # Output signal
+        change_dct = dict(self.rate_constant)
+        change_dct.update(kwargs)
+        expr = expr.subs(change_dct)
+        # All free symbols except for s should be removed. Now convert to transfer function
+        free_syms = expr.free_symbols
+        if len(free_syms) == 0:
+            raise ValueError("Expression contains no symbols (it's just a constant)")
+        elif len(free_syms) > 1:
+            raise ValueError(f"Expression contains multiple symbols: {free_syms}. "
+                            "Only single-variable rational functions are supported.")
+        s = free_syms.pop()
+        # Simplify and get numerator and denominator
+        expr = sp.simplify(expr)
+        numer, denom = sp.fraction(expr)
+        # Convert to polynomials
+        numer_poly = sp.Poly(numer, s)
+        denom_poly = sp.Poly(denom, s)
+        # Extract coefficients (from highest to lowest degree)
+        numer_coeffs = [float(c) for c in numer_poly.all_coeffs()]
+        denom_coeffs = [float(c) for c in denom_poly.all_coeffs()]
+        # Create transfer function
+        self.transfer_function = signal.TransferFunction(numer_coeffs, denom_coeffs) 
+        #
+        return self.transfer_function

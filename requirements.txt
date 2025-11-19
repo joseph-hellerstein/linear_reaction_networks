@@ -4,6 +4,7 @@ controlSBML
 coverage
 docstring_expander
 jupyterlab
+libsbml
 lmfit
 matplotlib
 mypy
