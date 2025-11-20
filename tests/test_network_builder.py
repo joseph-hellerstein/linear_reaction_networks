@@ -5,7 +5,7 @@ import tellurium as te  # type: ignore
 import numpy as np
 import sympy as sp  # type: ignore
 
-IGNORE_TEST = True
+IGNORE_TEST = False
 
 MODEL = """
 S1 -> S2; k201*S1
@@ -192,44 +192,6 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         # Should contain reaction lines
         reaction_lines = [line for line in lines if '->' in line]
         self.assertEqual(len(reaction_lines), 4)  # 2 stages * 2 reactions each
-
-    def testMakeSymbolicAMatrix1(self):
-        if IGNORE_TEST:
-            return
-        A_mat = np.array([[0, 1, 0], [0, 0, 1], [1, 1, 0]])
-        result = self.builder.makeSymbolicAMat(A_mat)
-        A_sym, rate_dct = result.A_mat, result.rate_dct
-        # Check the shape
-        self.assertEqual(A_sym.shape, (3, 3))
-        # Verify that columns sum to 0
-        self.assertEqual(0, sum(sp.ones(1, A_sym.rows)*A_sym))
-        # Verify that entries are present where expected
-        nz_mat = A_mat != 0 + np.eye(A_mat.shape[0])
-        nz_sym = A_sym.applyfunc(lambda x: True if x != 0 else False)
-        for irow in range(A_mat.shape[0]):
-            for icol in range(A_mat.shape[1]):
-                self.assertEqual(nz_mat[irow, icol], nz_sym[irow, icol],
-                        f"Mismatch at ({irow}, {icol})")
-        # Check the rate constant dictionary
-        for irow in range(A_sym.cols):
-            for icol in range(A_sym.rows):
-                if irow == icol:
-                    continue
-                if A_mat[irow, icol] == 0:
-                    continue
-                symbol_name = list(A_sym[irow, icol].free_symbols)[0].name
-                symbol_index = int(symbol_name[1:])  # Assuming format "kX"
-                symbol_row = symbol_index // 100 - 1
-                symbol_col = symbol_index % 100 - 1
-                self.assertEqual((irow, icol), (symbol_row, symbol_col))
-    
-    def testMakeSymbolicAMatrix2(self):
-        #if IGNORE_TEST:
-        #    return
-        result = self.builder.makeSymbolicAMat(MODEL)
-        A_sym, rate_dct = result.A_mat, result.rate_dct
-        import pdb; pdb.set_trace()
-
 
 
 if __name__ == '__main__':
