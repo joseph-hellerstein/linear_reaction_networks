@@ -34,12 +34,14 @@ class TestMakeSymbolicJacobian(unittest.TestCase):
         # Test that the generated Antimony can be loaded by Tellurium
         antimony_str = MODEL
         try:
-            jacobian, param_dict = makeSymbolicJacobian(antimony_str)
-            self.assertIsInstance(jacobian, sp.Matrix)
-            self.assertIsInstance(param_dict, dict)
-            self.assertTrue(isSymbol(jacobian[0,0], 'k1'))
-            self.assertTrue(isSymbol(jacobian[1,0], 'k1'))
-            self.assertTrue(isSymbol(jacobian[2,1], 'k2'))
+            result = makeSymbolicJacobian(antimony_str)
+            jacobian_smat = result.jacobian_smat
+            kinetic_constant_dct = result.kinetic_constant_dct
+            self.assertIsInstance(jacobian_smat, sp.Matrix)
+            self.assertIsInstance(kinetic_constant_dct, dict)
+            self.assertTrue(isSymbol(jacobian_smat[0,0], 'k1'))
+            self.assertTrue(isSymbol(jacobian_smat[1,0], 'k1'))
+            self.assertTrue(isSymbol(jacobian_smat[2,1], 'k2'))
         except Exception as e:
             self.fail(f"makeSymbolicJacobian failed: {e}") 
 

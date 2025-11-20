@@ -1,4 +1,4 @@
-from src.lrn_builder.generate_crn import generateCrn
+from lrn_builder.make_lti_crn import makeLtiCrn  # type: ignore
 
 import unittest
 import tellurium as te  # type: ignore
@@ -23,7 +23,7 @@ class TestGenerateCrn(unittest.TestCase):
             max_kinetic_constant = np.random.uniform(1, 10)
             max_stoichiometry = np.random.randint(1, 10)
             try:
-                model = generateCrn(
+                model = makeLtiCrn(np.random.randint(1, 10),
                     np.random.randint(1, max_num_reaction),
                     num_products_bounds=(1, max_num_product),
                     kinetic_constant_bounds=(0, max_kinetic_constant),

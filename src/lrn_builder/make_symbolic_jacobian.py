@@ -1,5 +1,6 @@
 '''Construct a symbolic Jacobian matrix from an Antimony model.'''
 
+from collections import namedtuple
 import libsbml # type: ignore
 import sympy as sp  # type: ignore
 import tellurium as te  # type: ignore
@@ -8,7 +9,16 @@ from collections import OrderedDict
 # FIXME: Should the calculation of degradation reactions be considered in calculating symbolic Jacobian?
 
 
-def makeSymbolicJacobian(antimony_str: str):
+MakeSymbolicJacobianResult = namedtuple("MakeSymbolicJacobianResult",
+        ["jacobian_mat", "jacobian_smat", "kinetic_constant_dct"])
+#  jacobian_mat : sympy.Matrix
+#      Symbolic Jacobian matrix where J[i,j] = d(rate_i)/d(spec
+#  jacobian_smat : sympy.Matrix
+#      Sparse symbolic Jacobian matrix
+#  kinetic_constant_dict : dict
+#      Dictionary mapping parameter names to their values
+
+def makeSymbolicJacobian(antimony_str: str) -> MakeSymbolicJacobianResult:
     """
     Convert an Antimony model to a symbolic Jacobian matrix.
     Reactions must either have 0 or 1 reactant with unit stoichiometry.
@@ -32,8 +42,9 @@ def makeSymbolicJacobian(antimony_str: str):
     Kinetics are mass action (k*S) if 1 reactant, or fixed rate (k) if 0 reactants.
     """
     # Load with tellurium and convert to SBML
-    r = te.loada(antimony_str)
-    sbml_str = r.getSBML()
+    rr = te.loada(antimony_str)
+    jacobian_mat = rr.getFullJacobian()
+    sbml_str = rr.getSBML()
     # Get the SBML model
     reader = libsbml.SBMLReader()
     document = reader.readSBMLFromString(sbml_str)
@@ -53,13 +64,13 @@ def makeSymbolicJacobian(antimony_str: str):
         species_list.append(species_id)
         species_symbols[species_id] = sp.Symbol(species_id)
     # Get parameters and create symbols and dictionary
-    param_dict = {}
+    kinetic_constant_dct = {}
     param_symbols = {}
     for i in range(model.getNumParameters()):
         param = model.getParameter(i)
         param_id = param.getId()
         param_value = param.getValue()
-        param_dict[param_id] = param_value
+        kinetic_constant_dct[param_id] = param_value
         param_symbols[param_id] = sp.Symbol(param_id)
     # Get local parameters from reactions. Construct symbols.
     for i in range(model.getNumReactions()):
@@ -70,7 +81,7 @@ def makeSymbolicJacobian(antimony_str: str):
                 param = kinetic_law.getParameter(j)
                 param_id = param.getId()
                 param_value = param.getValue()
-                param_dict[param_id] = param_value
+                kinetic_constant_dct[param_id] = param_value
                 param_symbols[param_id] = sp.Symbol(param_id)
     # Construct rate equations for each species
     rate_equation_dct = {species_id: sp.Integer(0) for species_id in species_list}
@@ -129,9 +140,12 @@ def makeSymbolicJacobian(antimony_str: str):
     # Compute Jacobian matrix
     # J[i,j] = d(f_i)/d(x_j) where f_i is the rate equation for species i
     species_vector = sp.Matrix([species_symbols[species_id] for species_id in species_list])
-    jacobian = ode_matrix.jacobian(species_vector)
+    jacobian_smat = ode_matrix.jacobian(species_vector)
     #
-    return jacobian, param_dict
+    return MakeSymbolicJacobianResult(
+        jacobian_mat=jacobian_mat,
+        jacobian_smat = jacobian_smat,
+        kinetic_constant_dct = kinetic_constant_dct)
 
 
 def extract_rate_constant(formula_str, reactant_id, param_symbols, species_symbols, reaction_id):

@@ -16,19 +16,25 @@ Characteristics of the generated CRN.
 import random
 import numpy as np
 import tellurium as te  # type: ignore
+from typing import Optional, Tuple
 
-def generateCrn(
-    num_reactions,
-    num_products_bounds=(1, 3),
-    kinetic_constant_bounds=(0.1, 10.0),
-    stoichiometry_bounds=(1, 3),
-    seed=None
+
+def makeLtiCrn(
+    num_species: int,
+    num_reactions: int,
+    num_products_bounds: Tuple[int, int] = (1, 3),
+    kinetic_constant_bounds: Tuple[float, float] = (0.1, 10.0),
+    stoichiometry_bounds: Tuple[int, int] = (1, 3),
+    seed: Optional[int] = None
 ):
     """
-    Generate a random chemical reaction network in Antimony language.
+    Generate a random linear time-invariant (LTI) chemical reaction network
+    in Antimony language.
     
     Parameters:
     -----------
+    num_species : int
+        Maximum number of species to generate
     num_reactions : int
         Total number of reactions to generate
     num_products_bounds : tuple of (int, int)
@@ -57,7 +63,6 @@ def generateCrn(
     antimony_lines.append("model random_crn()\n")
     
     # Track existing species and rate constants
-    existing_species = set()
     species_counter = 1
     rate_constants = []
     
@@ -66,15 +71,14 @@ def generateCrn(
     rate_constants.append(("k1", k1))
     antimony_lines.append(f"  # Reaction 1")
     antimony_lines.append(f"  -> S1; k1")
-    existing_species.add("S1")
-    species_counter = 2
+    existing_species = [f"S{str(n)}" for n in range(1, num_species + 1)]
     
     # Generate subsequent reactions
     for rxn_idx in range(2, num_reactions + 1):
         antimony_lines.append(f"\n  # Reaction {rxn_idx}")
         
         # Pick a random reactant from existing species
-        reactant = random.choice(list(existing_species))
+        reactant: str = random.choice(existing_species)
         
         # Determine number of products
         num_products = random.randint(num_products_bounds[0], num_products_bounds[1])
@@ -82,18 +86,7 @@ def generateCrn(
         # Generate products
         products = []
         for _ in range(num_products):
-            # Decide whether to use existing species or create new one
-            # Bias towards creating new species early on, existing species later
-            if len(existing_species) < 3 or random.random() < 0.5:
-                # Create new species
-                new_species = f"S{species_counter}"
-                existing_species.add(new_species)
-                species_counter += 1
-                product_species = new_species
-            else:
-                # Use existing species
-                product_species = random.choice(list(existing_species))
-            
+            product_species = random.choice(list(existing_species))
             # Assign stoichiometry
             stoich = random.randint(stoichiometry_bounds[0], stoichiometry_bounds[1])
             products.append((stoich, product_species))
