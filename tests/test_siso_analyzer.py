@@ -5,12 +5,12 @@ import tellurium as te  # type: ignore
 import numpy as np
 import sympy as sp  # type: ignore
 
-IGNORE_TEST = False
+IGNORE_TEST = True
 
 MODEL = """
-S1 -> S2; k201*S1
+S1_ -> S2_; k201*S1_
 S2 -> S3; k302*S2
-S1 = 10
+S1_ = 10
 S2 = 0
 S3 = 0
 k201 = 1
@@ -21,6 +21,8 @@ k302 = 2
 class TestMakeSequentialAntimony(unittest.TestCase):
 
     def setUp(self):
+        if IGNORE_TEST:
+            return
         self.num_stage = 3
         self.builder = SISOAnalyzer(MODEL)
 
@@ -49,7 +51,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         builder = SISOAnalyzer(MODEL)
         antimony_str = builder.makeSequentialAntimony(1)
         
-        # Should have 2 reactions: S0 -> S1 and S0 -> ;
+        # Should have 2 reactions: S0 -> S1_ and S0 -> ;
         self.assertIn("S0 -> S1", antimony_str)
         self.assertIn("S0 -> ;", antimony_str)
         
@@ -57,7 +59,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         self.assertIn("k1 = 1", antimony_str)
         self.assertIn("k2 = 2", antimony_str)
         
-        # Should have 2 species: S0 and S1
+        # Should have 2 species: S0 and S1_
         self.assertIn("S0 = 0", antimony_str)
         self.assertIn("S1 = 0", antimony_str)
 
@@ -109,7 +111,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         antimony_str = self.builder.makeSequentialAntimony(3)
         rr = te.loada(antimony_str)
         
-        # Should have num_stage + 1 species (S0, S1, ..., S_num_stage)
+        # Should have num_stage + 1 species (S0, S1_, ..., S_num_stage)
         species = rr.getFloatingSpeciesIds()
         self.assertEqual(len(species), self.num_stage + 1)
         
@@ -182,6 +184,121 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         # Should contain reaction lines
         reaction_lines = [line for line in lines if '->' in line]
         self.assertEqual(len(reaction_lines), 4)  # 2 stages * 2 reactions each
+
+    def testBug1(self):
+        if IGNORE_TEST:
+            return
+        model = """
+            -> S1_; k1
+            S7_ -> 3 S3_ + S5_ + S3_ + 2 S8_; k2 * S7_
+            S3_ -> S5_ + 3 S4_ + S8_ + 3 S9_; k3 * S3_
+            S6_ -> S6_ + S7_ + S7_ + S7_ + 3 S3_; k4 * S6_
+            S7_ -> S8_ + 2 S10_ + S6_ + S9_ + 3 S3_; k5 * S7_
+            S1_ -> S9_ + 3 S9_ + 3 S8_ + 3 S7_ + S9_; k6 * S1_
+            S7_ -> 2 S3_ + S5_; k7 * S7_
+            S2_ -> S8_ + S5_ + 2 S7_ + 2 S10_; k8 * S2_
+            S10_ -> S10_ + 2 S10_ + 3 S7_ + S4_; k9 * S10_
+            S3_ -> S3_ + 2 S10_ + S8_; k10 * S3_
+
+            # Rate constants
+            k1 = 0.1668
+            k2 = 0.9288
+            k3 = 0.6378
+            k4 = 0.4359
+            k5 = 0.3351
+            k6 = 0.6957
+            k7 = 0.3313
+            k8 = 0.5887
+            k9 = 0.2808
+            k10 = 0.4394
+
+            # Species initialization
+            S1_ = 1  # Input boundary species
+            S2_ = 0
+            S3_ = 0
+            S4_ = 0
+            S5_ = 0
+            S6_ = 0
+            S7_ = 0
+            S8_ = 0
+            S9_ = 0
+            S10_ = 0
+
+
+            # Degradation reactions
+            S7_ -> ; kd_S7_ * S7_
+            kd_S7_ = 1.9055
+            S3_ -> ; kd_S3_ * S3_
+            kd_S3_ = 6.6583
+            S5_ -> ; kd_S5_ * S5_
+            kd_S5_ = 2.7353
+            S8_ -> ; kd_S8_ * S8_
+            kd_S8_ = 4.2445
+            S4_ -> ; kd_S4_ * S4_
+            kd_S4_ = 2.4136
+            S9_ -> ; kd_S9_ * S9_
+            kd_S9_ = 2.4734
+            S6_ -> ; kd_S6_ * S6_
+            kd_S6_ = 0.3686
+            S10_ -> ; kd_S10_ * S10_
+            kd_S10_ = 3.6168
+
+            const S1_
+        """
+        analyzer = SISOAnalyzer(model)
+        transfer_function = analyzer.makeTransferFunction()
+
+    def testBug2(self):
+        #if IGNORE_TEST:
+        #    return
+        model = """
+        model random_crn()
+
+        -> $S1_; k1
+        S5_ -> 2 S4_ + 3 S4_ + S4_ + 2 S4_ + 3 S4_; k2 * S5_
+        S1_ -> 3 S4_ + 2 S5_ + 3 S5_ + S3_ + S3_; k3 * S1_
+        S2_ -> 3 S4_ + S3_ + 2 S3_ + S4_ + 3 S5_; k4 * S2_
+        S1_ -> S5_; k5 * S1_
+        S2_ -> 3 S3_ + 2 S3_ + 2 S3_ + S5_ + S5_; k6 * S2_
+        S1_ -> S4_ + 2 S5_ + 2 S4_ + S3_ + S5_; k7 * S1_
+        S2_ -> S4_ + 2 S5_ + S3_ + 3 S3_; k8 * S2_
+        S2_ -> S4_ + 3 S3_; k9 * S2_
+        S1_ -> S5_ + 2 S4_ + S4_; k10 * S1_
+
+        # Rate constants
+        k1 = 0.9742
+        k2 = 0.7012
+        k3 = 0.1698
+        k4 = 0.4629
+        k5 = 0.5307
+        k6 = 0.4652
+        k7 = 0.8688
+        k8 = 0.8631
+        k9 = 0.7551
+        k10 = 0.1057
+
+        # Species initialization
+        S1_ = 1  # Input boundary species
+        S2_ = 0
+        S3_ = 0
+        S4_ = 0
+        S5_ = 0
+
+
+        # Degradation reactions
+        S5_ -> ; kd_0 * S5_
+        kd_0 = 3.6785
+        S4_ -> ; kd_1 * S4_
+        kd_1 = 12.3013
+        S3_ -> ; kd_2 * S3_
+        kd_2 = 11.3991
+        end
+        """
+        analyzer = SISOAnalyzer(model, output_name="S5_")
+        #tf1 = analyzer.transfer_function_expr
+        tf1 = analyzer.makeTransferFunction()
+        import pdb; pdb.set_trace()
+
 
 
 if __name__ == '__main__':

@@ -29,7 +29,7 @@ NULL_KINETIC_CONSTANT_DCT = {}
 NULL_TRANSFER_FUNCTION_EXPR = sp.Symbol("Unknown")
 NULL_TRANSFER_FUNCTION_MATRIX = sp.Matrix()
 NULL_SPECIES_NAME = ""
-DEFAULT_INPUT_NAME = "S1"
+DEFAULT_INPUT_NAME = "S1_"
 
 
 MakeSymbolicAMatResult = namedtuple("MakeSymbolicAMatResult", ["A_sym", "rate_dct"])
@@ -55,10 +55,11 @@ class SISOAnalyzer(object):
         """
         # Initialize to the correct type. Changing self.antimony_str triggers
         # recalculation of jacobian matrices and kinetic_constant_dct
-        self.antimony_str = antimony_str
+        self.original_antimony_str = antimony_str
         self.input_name = input_name
         self.output_name = output_name
-        self._antimony_str = antimony_str
+        self.antimony_str = antimony_str.replace(f"${input_name}", f"{input_name}")  # Remove boundary marker for Tellurium
+        self.roadrunner = te.loada(self.antimony_str)
         self._jacobian_mat = NULL_JACOBIAN_MAT
         self._species_names = []
         self._jacobian_smat = NULL_JACOBIAN_SMAT
@@ -76,14 +77,14 @@ class SISOAnalyzer(object):
         Tuple[str, str]
             (input_name, output_name)
         """
-        column_names = cast(list[str], self.jacobian_mat.colnames)  # type: ignore
-        if not self.input_name in column_names:
-            raise ValueError(f"Input species {self.input_name} not found in model species: {column_names}")
+        candidate_names = self.roadrunner.getExtendedStoichiometryMatrix().rownames
+        if not self.input_name in candidate_names:
+            raise ValueError(f"Input species {self.input_name} not found in model species: {candidate_names}")
         if self.output_name == NULL_SPECIES_NAME:
-            column_names = cast(list[str], self.jacobian_mat.colnames)  # type: ignore
-            self.output_name = column_names[-1]
-        elif not self.output_name in column_names:
-            raise ValueError(f"Output species {self.output_name} not found in model species: {column_names}")
+            candidate_names = cast(list[str], self.jacobian_mat.colnames)  # type: ignore
+            self.output_name = candidate_names[-1]
+        elif not self.output_name in candidate_names:
+            raise ValueError(f"Output species {self.output_name} not found in model species: {candidate_names}")
 
 ########### GETTERS AND SETTERS #############
     @property
@@ -91,8 +92,7 @@ class SISOAnalyzer(object):
         """Returns the symbolic Jacobian matrix."""
         if len(self._jacobian_mat) > 0:
             return self._jacobian_mat
-        rr = te.loada(self.antimony_str)
-        self._jacobian_mat = rr.getFullJacobian()
+        self._jacobian_mat = self.roadrunner.getFullJacobian()
         return self._jacobian_mat
     
     @property
@@ -101,6 +101,11 @@ class SISOAnalyzer(object):
         if len(self._species_names) == 0:
             self._species_names = cast(list[str], self.jacobian_mat.colnames)  # type: ignore
         return self._species_names
+    
+    @property
+    def sorted_species_names(self) -> list[str]:
+        """Returns the list of species names in the model."""
+        return sorted(self.species_names)
     
     @property
     def num_species(self) -> int:
@@ -129,12 +134,11 @@ class SISOAnalyzer(object):
         if self._transfer_function_expr == NULL_TRANSFER_FUNCTION_EXPR:
             # Construct the transfer function expression
             input_index = self.species_names.index(self.input_name)
-            output_index = self.species_names.index(self.output_name)
             s = sp.Symbol("s")
-            B = sp.Matrix(np.zeros((self.num_species, 1)))
-            B[input_index] = input_index
+            B = sp.Matrix(np.zeros((self.num_species, self.num_species)))
+            B[input_index, input_index] = 1
             I = sp.eye(self.jacobian_smat.rows)
-            self._transfer_function_smat = s*(s*I - self.jacobian_smat).inv() * B
+            self._transfer_function_smat = (s*I - self.jacobian_smat).inv() * B
         return self._transfer_function_smat
     
     @property
@@ -142,8 +146,8 @@ class SISOAnalyzer(object):
         """Returns the symbolic transfer function expression."""
         if self._transfer_function_expr == NULL_TRANSFER_FUNCTION_EXPR:
             # Construct the transfer function expression
-            input_index = self.species_names.index(self.input_name)
-            output_index = self.species_names.index(self.output_name)
+            input_index = self.sorted_species_names.index(self.input_name)
+            output_index = self.sorted_species_names.index(self.output_name)
             self._transfer_function_expr = self.transfer_function_smat[output_index, input_index]
         return self._transfer_function_expr
     
@@ -238,7 +242,7 @@ class SISOAnalyzer(object):
         # All free symbols except for s should be removed. Now convert to transfer function
         free_syms = transfer_function_expr.free_symbols
         if len(free_syms) == 0:
-            raise ValueError("Expression contains no symbols (it's just a constant)")
+            return signal.TransferFunction([float(transfer_function_expr)], [1])
         elif len(free_syms) > 1:
             raise ValueError(f"Expression contains multiple symbols: {free_syms}. "
                             "Only single-variable rational functions are supported.")
