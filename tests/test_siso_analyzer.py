@@ -3,7 +3,9 @@ from lrn_builder.siso_analyzer import SISOAnalyzer  # type: ignore
 import unittest
 import tellurium as te  # type: ignore
 import numpy as np
+import pandas as pd  # type: ignore
 import sympy as sp  # type: ignore
+from typing import Optional
 
 IGNORE_TEST = True
 
@@ -248,6 +250,27 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         analyzer = SISOAnalyzer(model)
         transfer_function = analyzer.makeTransferFunction()
 
+    def compareJacobian(self, jacobian_df:pd.DataFrame, arr_mat:np.ndarray, arr_names: list[str]=[]):
+        # Make sure that the Jacobian is computed correctly
+        #   species_names are names associated with arr_mat
+        column_names = list(jacobian_df.columns)
+        if len(arr_names) == 0:
+            if hasattr(arr_mat, 'colnames'):
+                arr_names = list(arr_mat.colnames)  # type: ignore
+            else:
+                self.fail("Array names must be provided if arr_mat has no colnames attribute")
+        for row_idx, row_name in enumerate(column_names):
+            row_arr_idx = arr_names.index(row_name)
+            for col_idx, col_name in enumerate(column_names):
+                col_arr_idx = arr_names.index(col_name)
+                try:
+                    if not (np.isclose(float(arr_mat[row_arr_idx, col_arr_idx]),
+                            float(jacobian_df.values[row_idx, col_idx]))):
+                        self.fail(f"Jacobian mismatch at ({row_name}, {col_name})")
+                except:
+                    import pdb; pdb.set_trace()
+                    pass
+
     def testBug2(self):
         #if IGNORE_TEST:
         #    return
@@ -295,6 +318,18 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         end
         """
         analyzer = SISOAnalyzer(model, output_name="S5_")
+        # Make sure that the Jacobian is computed correctly
+        jacobian_df = analyzer.jacobian_df
+        self.assertIsNotNone(jacobian_df)
+        self.assertEqual(jacobian_df.shape[0], jacobian_df.shape[1]) 
+        # Validate against roadrunner's Jacobian
+        arr_mat = analyzer.roadrunner.getFullJacobian()
+        self.compareJacobian(jacobian_df, arr_mat)
+        # Validate the symbolic Jacobian by substitution
+        # FIXME: Bug in makeSymbolicJacobian where species are not sorted correctly
+        jacobian_arr = analyzer.jacobian_smat.subs(analyzer.kinetic_constant_dct)
+        import pdb; pdb.set_trace()
+        self.compareJacobian(jacobian_df, jacobian_arr, arr_names=list(jacobian_df.columns))
         #tf1 = analyzer.transfer_function_expr
         tf1 = analyzer.makeTransferFunction()
         import pdb; pdb.set_trace()

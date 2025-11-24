@@ -23,7 +23,7 @@ PRODUCT_FACTOR = 1   # Factor used to name rate constant (column in A matrix)
 INPUT_NAME = "S1"  # Default input species nJame
 # Null values for key attributes
 NULL_JACOBIAN_SMAT = sp.Matrix()
-NULL_JACOBIAN_MAT = np.array([])
+NULL_JACOBIAN_DF = pd.DataFrame()
 NULL_ANTIMONY_STR = ""
 NULL_KINETIC_CONSTANT_DCT = {}
 NULL_TRANSFER_FUNCTION_EXPR = sp.Symbol("Unknown")
@@ -60,7 +60,7 @@ class SISOAnalyzer(object):
         self.output_name = output_name
         self.antimony_str = antimony_str.replace(f"${input_name}", f"{input_name}")  # Remove boundary marker for Tellurium
         self.roadrunner = te.loada(self.antimony_str)
-        self._jacobian_mat = NULL_JACOBIAN_MAT
+        self._jacobian_df = NULL_JACOBIAN_DF
         self._species_names = []
         self._jacobian_smat = NULL_JACOBIAN_SMAT
         self._kinetic_constant_dct = NULL_KINETIC_CONSTANT_DCT
@@ -81,31 +81,47 @@ class SISOAnalyzer(object):
         if not self.input_name in candidate_names:
             raise ValueError(f"Input species {self.input_name} not found in model species: {candidate_names}")
         if self.output_name == NULL_SPECIES_NAME:
-            candidate_names = cast(list[str], self.jacobian_mat.colnames)  # type: ignore
+            candidate_names = cast(list[str], self.jacobian_df.columns)  # type: ignore
             self.output_name = candidate_names[-1]
         elif not self.output_name in candidate_names:
             raise ValueError(f"Output species {self.output_name} not found in model species: {candidate_names}")
 
 ########### GETTERS AND SETTERS #############
     @property
+    def jacobian_df(self) -> pd.DataFrame:
+        """Returns the numeric Jacobian DataFrame."""
+        if len(self._jacobian_df) == 0:
+            jacobian_mat = self.roadrunner.getFullJacobian()
+            column_names = cast(list[str], jacobian_mat.colnames)  # type: ignore
+            sorted_column_idxs = np.argsort(column_names)
+            sorted_species_names = [column_names[i] for i in sorted_column_idxs]
+            arrs = []
+            for idx, name in enumerate(sorted_species_names):
+                new_idx = sorted_column_idxs[idx]
+                arr = jacobian_mat[new_idx, sorted_column_idxs]
+                arrs.append(arr)
+            sorted_arr = np.array(arrs)
+            self._jacobian_df = pd.DataFrame(sorted_arr,
+                                index=sorted_species_names,
+                                columns=sorted_species_names)
+        return self._jacobian_df
+
+    """ 
+    @property
     def jacobian_mat(self) -> np.ndarray:
-        """Returns the symbolic Jacobian matrix."""
+        # Returns the symbolic Jacobian matrix.
         if len(self._jacobian_mat) > 0:
             return self._jacobian_mat
         self._jacobian_mat = self.roadrunner.getFullJacobian()
         return self._jacobian_mat
+    """
     
     @property
     def species_names(self) -> list[str]:
         """Returns the list of species names in the model."""
         if len(self._species_names) == 0:
-            self._species_names = cast(list[str], self.jacobian_mat.colnames)  # type: ignore
+            self._species_names = list(self.jacobian_df.columns)  # type: ignore
         return self._species_names
-    
-    @property
-    def sorted_species_names(self) -> list[str]:
-        """Returns the list of species names in the model."""
-        return sorted(self.species_names)
     
     @property
     def num_species(self) -> int:
@@ -118,7 +134,7 @@ class SISOAnalyzer(object):
         if len(self._jacobian_smat) > 0:
             return self._jacobian_smat
         self._updateJacobianAndKineticConstants()
-        return self.jacobian_smat
+        return self._jacobian_smat
     
     @property
     def kinetic_constant_dct(self) -> dict:
@@ -146,8 +162,8 @@ class SISOAnalyzer(object):
         """Returns the symbolic transfer function expression."""
         if self._transfer_function_expr == NULL_TRANSFER_FUNCTION_EXPR:
             # Construct the transfer function expression
-            input_index = self.sorted_species_names.index(self.input_name)
-            output_index = self.sorted_species_names.index(self.output_name)
+            input_index = self.species_names.index(self.input_name)
+            output_index = self.species_names.index(self.output_name)
             self._transfer_function_expr = self.transfer_function_smat[output_index, input_index]
         return self._transfer_function_expr
     

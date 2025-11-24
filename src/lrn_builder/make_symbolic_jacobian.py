@@ -6,11 +6,9 @@ import sympy as sp  # type: ignore
 import tellurium as te  # type: ignore
 from collections import OrderedDict
 
-# FIXME: Should the calculation of degradation reactions be considered in calculating symbolic Jacobian?
-
 
 MakeSymbolicJacobianResult = namedtuple("MakeSymbolicJacobianResult",
-        ["jacobian_mat", "jacobian_smat", "kinetic_constant_dct"])
+        ["jacobian_smat", "kinetic_constant_dct", "species_names"])
 #  jacobian_mat : sympy.Matrix
 #      Symbolic Jacobian matrix where J[i,j] = d(rate_i)/d(spec
 #  jacobian_smat : sympy.Matrix
@@ -33,6 +31,7 @@ def makeSymbolicJacobian(antimony_str: str) -> MakeSymbolicJacobianResult:
     --------
     jacobian : sympy.Matrix
         Symbolic Jacobian matrix where J[i,j] = d(rate_i)/d(species_j)
+        (species are sorted alphabetically)
     param_dict : dict
         Dictionary mapping parameter names to their values
         
@@ -54,15 +53,15 @@ def makeSymbolicJacobian(antimony_str: str) -> MakeSymbolicJacobianResult:
         raise ValueError("Failed to convert Antimony to SBML")
     model = document.getModel()
     # Get species and create symbols
-    species_list = []
+    species_names = []
     species_symbols = {}
     for i in range(model.getNumSpecies()):
         species = model.getSpecies(i)
-        species_id = species.getId()
+        species_name = species.getId()
         # Skip boundary/constant species
         #if not species.getBoundaryCondition() and not species.getConstant():
-        species_list.append(species_id)
-        species_symbols[species_id] = sp.Symbol(species_id)
+        species_names.append(species_name)
+        species_symbols[species_name] = sp.Symbol(species_name)
     # Get parameters and create symbols and dictionary
     kinetic_constant_dct = {}
     param_symbols = {}
@@ -76,15 +75,15 @@ def makeSymbolicJacobian(antimony_str: str) -> MakeSymbolicJacobianResult:
     for i in range(model.getNumReactions()):
         reaction = model.getReaction(i)
         kinetic_law = reaction.getKineticLaw()
-        if kinetic_law:
-            for j in range(kinetic_law.getNumParameters()):
-                param = kinetic_law.getParameter(j)
-                param_id = param.getId()
-                param_value = param.getValue()
-                kinetic_constant_dct[param_id] = param_value
-                param_symbols[param_id] = sp.Symbol(param_id)
+        import pdb; pdb.set_trace()
+        for j in range(kinetic_law.getNumParameters()):
+            param = kinetic_law.getParameter(j)
+            param_id = param.getId()
+            param_value = param.getValue()
+            kinetic_constant_dct[param_id] = param_value
+            param_symbols[param_id] = sp.Symbol(param_id)
     # Construct rate equations for each species
-    rate_equation_dct = {species_id: sp.Integer(0) for species_id in species_list}
+    rate_equation_dct = {species_id: sp.Integer(0) for species_id in species_names}
     for i in range(model.getNumReactions()):
         reaction = model.getReaction(i)
         reaction_id = reaction.getId()
@@ -129,21 +128,27 @@ def makeSymbolicJacobian(antimony_str: str) -> MakeSymbolicJacobianResult:
             rate_expr = rate_constant_symbol * species_symbols[reactant_id]
         # Update rate equations
         # Reactant is consumed
-        if reactant_id and reactant_id in species_list:
+        if reactant_id and reactant_id in species_names:
             rate_equation_dct[reactant_id] -= rate_expr
         # Products are produced
+        # FIXME: Does not create the correct rate equations
         for product_id, stoich in product_stoichiometry.items():
-            if product_id in species_list:
+            if product_id in species_names:
                 rate_equation_dct[product_id] += stoich * rate_expr
     # Create ODE matrix (column vector)
-    ode_matrix = sp.Matrix([rate_equation_dct[species_id] for species_id in species_list])
+    ode_matrix = sp.Matrix([rate_equation_dct[species_id] for species_id in species_names])
     # Compute Jacobian matrix
     # J[i,j] = d(f_i)/d(x_j) where f_i is the rate equation for species i
-    species_vector = sp.Matrix([species_symbols[species_id] for species_id in species_list])
+    species_vector = sp.Matrix([species_symbols[species_id] for species_id in species_names])
     jacobian_smat = ode_matrix.jacobian(species_vector)
+    # Sort the symbolic Jacobian rows and columns by lexicographic ordered species names
+    sorted_species_names = sorted(species_names)
+    name_to_index = {name: idx for idx, name in enumerate(species_names)}
+    sorted_indices = [name_to_index[name] for name in sorted_species_names]
+    jacobian_smat = jacobian_smat.extract(sorted_indices, sorted_indices)
     #
     return MakeSymbolicJacobianResult(
-        jacobian_mat=jacobian_mat,
+        species_names=sorted_species_names,
         jacobian_smat = jacobian_smat,
         kinetic_constant_dct = kinetic_constant_dct)
 
