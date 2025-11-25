@@ -7,7 +7,7 @@ Conventions for Antimony models.
 """
 
 
-from src.lrn_builder.make_symbolic_jacobian import makeSymbolicJacobian
+from src.lrn_builder.symbolic_jacobian_maker import SymbolicJacobianMaker
 
 from collections import namedtuple
 import numpy as np
@@ -56,21 +56,44 @@ class SISOAnalyzer(object):
         # Initialize to the correct type. Changing self.antimony_str triggers
         # recalculation of jacobian matrices and kinetic_constant_dct
         self.original_antimony_str = antimony_str
-        self.input_name = input_name
-        self.output_name = output_name
         self.antimony_str = antimony_str.replace(f"${input_name}", f"{input_name}")  # Remove boundary marker for Tellurium
         self.roadrunner = te.loada(self.antimony_str)
-        self._jacobian_df = NULL_JACOBIAN_DF
-        self._species_names = []
-        self._jacobian_smat = NULL_JACOBIAN_SMAT
-        self._kinetic_constant_dct = NULL_KINETIC_CONSTANT_DCT
+        self.input_name = input_name
+        # Initialize other properties
+        self.initialize()
+        self.output_name = self._updateOutputName(output_name)
+        # The following are calculaed via deferred evaluation after initialize
         self._transfer_function_smat = NULL_TRANSFER_FUNCTION_MATRIX
         self._transfer_function_expr = NULL_TRANSFER_FUNCTION_EXPR
-        self._updateOutputName()
 
-    def _updateOutputName(self) -> None:
+    def initialize(self) -> None:
+        """Initializes attributes in a consistent way"""
+        maker = SymbolicJacobianMaker(self.antimony_str)
+        maker.initialize()
+        # Numeric Jacobian DataFrame
+        jacobian_mat = maker.jacobian_mat
+        column_names = cast(list[str], jacobian_mat.colnames)  # type: ignore
+        sorted_column_idxs = np.argsort(column_names)
+        sorted_species_names = [column_names[i] for i in sorted_column_idxs]
+        arrs = []
+        for idx, name in enumerate(sorted_species_names):
+            new_idx = sorted_column_idxs[idx]
+            arr = jacobian_mat[new_idx, sorted_column_idxs]
+            arrs.append(arr)
+        sorted_arr = np.array(arrs)
+        self.jacobian_df = pd.DataFrame(sorted_arr,
+                            index=sorted_species_names,
+                            columns=sorted_species_names)
+        # Other attributes
+        self.jacobian_smat = maker.jacobian_smat
+        self.kinetic_constant_dct = maker.kinetic_constant_dct
+        self.species_names = maker.species_names
+        self.num_species = len(self.species_names)
+        assert(np.all(np.array(self.species_names) == np.array(self.jacobian_df.columns)))
+
+    def _updateOutputName(self, proposed_output_name) -> str:
         """
-        Updatesthe input and output species names.
+        Updates the input and output species names.
 
         Returns:
         --------
@@ -80,70 +103,17 @@ class SISOAnalyzer(object):
         candidate_names = self.roadrunner.getExtendedStoichiometryMatrix().rownames
         if not self.input_name in candidate_names:
             raise ValueError(f"Input species {self.input_name} not found in model species: {candidate_names}")
-        if self.output_name == NULL_SPECIES_NAME:
+        if proposed_output_name == NULL_SPECIES_NAME:
             candidate_names = cast(list[str], self.jacobian_df.columns)  # type: ignore
-            self.output_name = candidate_names[-1]
-        elif not self.output_name in candidate_names:
+            output_name = candidate_names[-1]
+        else:
+            output_name = proposed_output_name
+        if output_name not in candidate_names:
             raise ValueError(f"Output species {self.output_name} not found in model species: {candidate_names}")
+        #
+        return output_name
 
 ########### GETTERS AND SETTERS #############
-    @property
-    def jacobian_df(self) -> pd.DataFrame:
-        """Returns the numeric Jacobian DataFrame."""
-        if len(self._jacobian_df) == 0:
-            jacobian_mat = self.roadrunner.getFullJacobian()
-            column_names = cast(list[str], jacobian_mat.colnames)  # type: ignore
-            sorted_column_idxs = np.argsort(column_names)
-            sorted_species_names = [column_names[i] for i in sorted_column_idxs]
-            arrs = []
-            for idx, name in enumerate(sorted_species_names):
-                new_idx = sorted_column_idxs[idx]
-                arr = jacobian_mat[new_idx, sorted_column_idxs]
-                arrs.append(arr)
-            sorted_arr = np.array(arrs)
-            self._jacobian_df = pd.DataFrame(sorted_arr,
-                                index=sorted_species_names,
-                                columns=sorted_species_names)
-        return self._jacobian_df
-
-    """ 
-    @property
-    def jacobian_mat(self) -> np.ndarray:
-        # Returns the symbolic Jacobian matrix.
-        if len(self._jacobian_mat) > 0:
-            return self._jacobian_mat
-        self._jacobian_mat = self.roadrunner.getFullJacobian()
-        return self._jacobian_mat
-    """
-    
-    @property
-    def species_names(self) -> list[str]:
-        """Returns the list of species names in the model."""
-        if len(self._species_names) == 0:
-            self._species_names = list(self.jacobian_df.columns)  # type: ignore
-        return self._species_names
-    
-    @property
-    def num_species(self) -> int:
-        """Returns the number of species in the model."""
-        return len(self.species_names)
-    
-    @property
-    def jacobian_smat(self) -> sp.Matrix:
-        """Returns the symbolic Jacobian matrix."""
-        if len(self._jacobian_smat) > 0:
-            return self._jacobian_smat
-        self._updateJacobianAndKineticConstants()
-        return self._jacobian_smat
-    
-    @property
-    def kinetic_constant_dct(self) -> dict:
-        """Returns the symbolic Jacobian matrix."""
-        if len(self._kinetic_constant_dct) > 0:
-            return self._kinetic_constant_dct
-        self._updateJacobianAndKineticConstants()
-        return self._kinetic_constant_dct
-    
     @property
     def transfer_function_smat(self) -> sp.Matrix:
         """Returns the symbolic transfer function expression."""
@@ -167,11 +137,6 @@ class SISOAnalyzer(object):
             self._transfer_function_expr = self.transfer_function_smat[output_index, input_index]
         return self._transfer_function_expr
     
-    def _updateJacobianAndKineticConstants(self) -> None:
-        """Updates the Jacobian matrices and kinetic constant dictionary."""
-        result = makeSymbolicJacobian(self.antimony_str)
-        self._jacobian_smat = result.jacobian_smat
-        self._kinetic_constant_dct = result.kinetic_constant_dct
 
     ############ METHODS #############
 
