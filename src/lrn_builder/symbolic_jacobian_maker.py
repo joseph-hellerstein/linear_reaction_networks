@@ -5,9 +5,11 @@ import libsbml # type: ignore
 import sympy as sp  # type: ignore
 import tellurium as te  # type: ignore
 from collections import OrderedDict
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Any
 
 
+ReactionSymbolicJacobian = namedtuple("ReactionSymbolicJacobian", ["A_smat", "b_smat",
+        "reactant_name", "product_names", "kinetic_constant_name"])
 ReactionDescription = namedtuple("ReactionDescription",
         ["reaction_name", "reactant_name", "kinetic_constant_name", "product_stoichiometry_dct"]) 
 MakeSymbolicJacobianResult = namedtuple("MakeSymbolicJacobianResult",
@@ -35,13 +37,14 @@ class SymbolicJacobianMaker(object):
         self.antimony_str = antimony_str
         # See build() for other attributes
 
-    def build(self)->None:
-        # Workflow to build the symbolic Jacobian
-        self.model = self._makeModel()
+    def initialize(self)->None:
+        # Initializes the object
+        self.model, self.roadrunner = self._makeModel()
+        self.jacobian_mat = self.roadrunner.getFullJacobian()
         self.kinetic_constant_dct: dict = self._makeKineticConstantDct()
         self.species_names: list = self._makeSpeciesNames()
-        self.reaction_description_dct: dict = self._makeReactionDescription()
-        self.jacobian_smat = self._makeSymbolicJacobian()
+        self.num_species: int = len(self.species_names)
+        self.jacobian_smat, self.b_mat = self._makeSymbolicJacobian()
 
     def _getSpeciesIndex(self, species_name: str)->int:
         # Get the index of a species in the species_names list
@@ -51,7 +54,7 @@ class SymbolicJacobianMaker(object):
             raise ValueError(f"Species {species_name} not found in species names")
         return idx
 
-    def _makeModel(self)->libsbml.Model:
+    def _makeModel(self)->Tuple[libsbml.Model, Any]:
         # Load with tellurium and convert to SBML
         rr = te.loada(self.antimony_str)
         sbml_str = rr.getSBML()
@@ -63,7 +66,7 @@ class SymbolicJacobianMaker(object):
             document.printErrors()
             raise ValueError("Failed to convert Antimony to SBML")
         model = document.getModel()
-        return model
+        return model, rr
     
     def _makeSpeciesNames(self)->List[str]:
         # Include all species, including boundary/constant species
@@ -133,37 +136,23 @@ class SymbolicJacobianMaker(object):
         #
         return reaction_description_dct
     
-    def _makeSymbolicJacobian(self)->sp.Matrix:
-        # Create the symbolic Jacobian matrix
-        raise NotImplementedError("Not yet implemented")
-    
-    @classmethod
-    def makeSymbolicJacobian(cls, antimony_str: str)->sp.Matrix:
-        '''Create a symbolic Jacobian matrix from an Antimony model string.
-        
-        Parameters:
-        -----------
-        antimony_str: str
-            Antimony model string
-        
-        Returns:
-        --------
-        MakeSymbolicJacobianResult
-            Named tuple with fields:
-            - jacobian_smat : sympy.Matrix
-                Symbolic Jacobian matrix where J[i,j] = d(rate_i)/d(species_j)
-            - kinetic_constant_dct : dict
-                Dictionary mapping parameter names to their values
-            - species_names : list
-                List of species names in the order corresponding to the Jacobian matrix
-        '''
-        maker = cls(antimony_str)
-        maker.build()
-        return maker.jacobian_smat
+    def _makeSymbolicJacobian(self)->Tuple[sp.Matrix, sp.Matrix]:
+        # Create the symbolic Jacobian matrix and the b matrix
+        # Returns: (jacobian_smat, b_smat)
+        reactions = [self.model.getReaction(i) for i in range(self.model.getNumReactions())]
+        lti_results = [self._makeReactionLti(r) for r in reactions]
+        symbolic_jacobians = [r.A_smat for r in lti_results]
+        symbolic_bs = [r.b_smat for r in lti_results]
+        jacobian_smat = symbolic_jacobians[0]
+        for smat in symbolic_jacobians[1:]:
+            jacobian_smat += smat
+        b_smat = symbolic_bs[0]
+        for smat in symbolic_bs[1:]:
+            b_smat += smat
+        return jacobian_smat, b_smat
 
-    SymbolicJacobian = namedtuple("SymbolicJacobian", ["jacobian_smat", "b_smat"])
-    def _makeReactionSymbolicJacobian(self, reaction: libsbml.Reaction)->SymbolicJacobian:
-        """ Creates the symbolic A and B matrices for a given reaction.
+    def _makeReactionLti(self, reaction: libsbml.Reaction)->ReactionSymbolicJacobian:
+        """ Creates the symbolic A and B LTI matrices for a given reaction.
         The B matrix is n X 1, and contains the rate at which the i-th species changes
 
         Args:
@@ -192,7 +181,7 @@ class SymbolicJacobianMaker(object):
             reactant_name = reactant.getSpecies()
         # Parse the kinetic law to extract the rate constant, products, and their stoichiometries
         kinetic_law_str = reaction.getKineticLaw()
-        kinetic_law_strs = kinetic_law_str.formula.split(" ").strip()
+        kinetic_law_strs = [s.strip() for s in kinetic_law_str.formula.split(" ")]
         kinetic_constants = findStrs(kinetic_law_strs, list(self.kinetic_constant_dct.keys()))
         if len(kinetic_constants) != 1:
             raise ValueError(f"Reaction {reaction.getId()} has unexpected kinetic law: {kinetic_law_str}")
@@ -202,13 +191,13 @@ class SymbolicJacobianMaker(object):
             raise ValueError(f"Reaction {reaction.getId()} has unexpected kinetic law: {kinetic_law_str}")
         kinetic_species_name = species_names[0] if len(species_names) == 1 else None
         # Get products and their stoichiometries
-        product_stoichiometry_dct: dict = {}  # key: product_id, value: stoichiometry
+        product_stoichiometry_dct: dict = {s: 0 for s in self.species_names}  # key: product_id, value: stoichiometry
         for j in range(reaction.getNumProducts()):
             product = reaction.getProduct(j)
             product_id = product.getSpecies()
-            product_stoichiometry_dct[product_id] = product.getStoichiometry()
+            product_stoichiometry_dct[product_id] += product.getStoichiometry()
         # Construct the symbolic Jacobian for this reaction
-        jacobian_smat = sp.Matrix.zeros(len(self.species_names), len(self.species_names))
+        A_smat = sp.Matrix.zeros(len(self.species_names), len(self.species_names))
         b_smat = sp.Matrix.zeros(len(self.species_names), 1)
         kinetic_constant_symbol = sp.Symbol(kinetic_constant_name)
         #   Handle the reactant
@@ -216,14 +205,23 @@ class SymbolicJacobianMaker(object):
             reactant_idx = self._getSpeciesIndex(reactant_name)
             if kinetic_species_name is not None:
                 kinetic_species_idx = self._getSpeciesIndex(kinetic_species_name)
-                jacobian_smat[reactant_idx, kinetic_species_idx] = -kinetic_constant_symbol
+                A_smat[reactant_idx, kinetic_species_idx] = -kinetic_constant_symbol
             else:
                 b_smat[reactant_idx] = -kinetic_constant_symbol
         #   Handle the products
+        if kinetic_species_name is not None:
+            kinetic_species_idx = self._getSpeciesIndex(kinetic_species_name)
+        else:
+            kinetic_species_idx = -1
         for product_id, stoich in product_stoichiometry_dct.items():
+            if stoich == 0:
+                continue
             product_idx = self._getSpeciesIndex(product_id)
-            if reactant_name is not None:
-                reactant_idx = self._getSpeciesIndex(reactant_name)
-                jacobian_smat[product_idx, reactant_idx] = stoich * kinetic_constant_symbol
+            if kinetic_species_name is not None:
+                A_smat[product_idx, kinetic_species_idx] = stoich * kinetic_constant_symbol
+            else:
+                b_smat[product_idx] = stoich * kinetic_constant_symbol
         #
-        return self.SymbolicJacobian(jacobian_smat=jacobian_smat, b_smat=b_smat)
+        product_names = [p for p, s in product_stoichiometry_dct.items() if s > 0]
+        return ReactionSymbolicJacobian(A_smat=A_smat, b_smat=b_smat, reactant_name=reactant_name,
+                product_names=product_names, kinetic_constant_name=kinetic_constant_name)
