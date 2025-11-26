@@ -1,22 +1,44 @@
 from lrn_builder.siso_analyzer import SISOAnalyzer  # type: ignore
 
+import matplotlib.pyplot as plt  # type: ignore
+from scipy import signal  # type: ignore
 import unittest
 import tellurium as te  # type: ignore
-import numpy as np
 import pandas as pd  # type: ignore
 import sympy as sp  # type: ignore
 from typing import Optional
 
-IGNORE_TEST = False
+IGNORE_TEST = True
+IS_PLOT = True
 
 MODEL = """
-S1_ -> S2_; k201*S1_
-S2 -> S3; k302*S2
-S1_ = 10
-S2 = 0
-S3 = 0
-k201 = 1
-k302 = 2
+-> $S1_; k1
+S1_ -> S2_; k2*S1_
+S2_ -> S3_; k3*S2_
+S3_ -> ; k4*S3_
+S1_ = 1
+S2_ = 0
+S3_ = 0
+k1 = 1
+k2 = 1
+k3 = 3
+k4 = 4
+"""
+
+MODEL2 = """
+-> $S1_; k1
+S1_ -> 2 S2_ + S3; k2*S1_
+S2_ -> 3 S3_; k3*S2_
+S3_ -> ; k4*S3_
+S3_ -> S4_ + S1_; k5*S3_
+S1_ = 1
+S2_ = 0
+S3_ = 0
+k1 = 1
+k2 = 1
+k3 = 3
+k4 = 4
+k5 = 5
 """
 
 
@@ -187,65 +209,140 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         reaction_lines = [line for line in lines if '->' in line]
         self.assertEqual(len(reaction_lines), 4)  # 2 stages * 2 reactions each
 
-    def testBug1(self):
+    def testTransferFunction1a(self):
+        if IGNORE_TEST:
+            return
+        analyzer = SISOAnalyzer(MODEL2, output_name="S4_")
+        if IS_PLOT:
+            analyzer.plotTransferFunctionValidation()
+
+    def testTransferFunction1(self):
+        if IGNORE_TEST:
+            return
+        analyzer = SISOAnalyzer(MODEL)
+        k1, k2, k3, k4, s = sp.symbols('k1, k2 k3 k4 s')
+        expected_tf_expr = 1.0*k1*k2*k3/(k3*k4 + k3*s + k4*s + s**2)
+        tf_expr = analyzer.transfer_function_expr
+        self.assertEqual(sp.simplify(tf_expr - expected_tf_expr), 0)
+        if IS_PLOT:
+            analyzer.plotTransferFunctionValidation()
+
+    def testTransferFunction2(self):
         if IGNORE_TEST:
             return
         model = """
-            -> S1_; k1
-            S7_ -> 3 S3_ + S5_ + S3_ + 2 S8_; k2 * S7_
-            S3_ -> S5_ + 3 S4_ + S8_ + 3 S9_; k3 * S3_
-            S6_ -> S6_ + S7_ + S7_ + S7_ + 3 S3_; k4 * S6_
-            S7_ -> S8_ + 2 S10_ + S6_ + S9_ + 3 S3_; k5 * S7_
-            S1_ -> S9_ + 3 S9_ + 3 S8_ + 3 S7_ + S9_; k6 * S1_
-            S7_ -> 2 S3_ + S5_; k7 * S7_
-            S2_ -> S8_ + S5_ + 2 S7_ + 2 S10_; k8 * S2_
-            S10_ -> S10_ + 2 S10_ + 3 S7_ + S4_; k9 * S10_
-            S3_ -> S3_ + 2 S10_ + S8_; k10 * S3_
-
-            # Rate constants
-            k1 = 0.1668
-            k2 = 0.9288
-            k3 = 0.6378
-            k4 = 0.4359
-            k5 = 0.3351
-            k6 = 0.6957
-            k7 = 0.3313
-            k8 = 0.5887
-            k9 = 0.2808
-            k10 = 0.4394
-
-            # Species initialization
-            S1_ = 1  # Input boundary species
-            S2_ = 0
-            S3_ = 0
-            S4_ = 0
-            S5_ = 0
-            S6_ = 0
-            S7_ = 0
-            S8_ = 0
-            S9_ = 0
-            S10_ = 0
-
-
-            # Degradation reactions
-            S7_ -> ; kd_S7_ * S7_
-            kd_S7_ = 1.9055
-            S3_ -> ; kd_S3_ * S3_
-            kd_S3_ = 6.6583
-            S5_ -> ; kd_S5_ * S5_
-            kd_S5_ = 2.7353
-            S8_ -> ; kd_S8_ * S8_
-            kd_S8_ = 4.2445
-            S4_ -> ; kd_S4_ * S4_
-            kd_S4_ = 2.4136
-            S9_ -> ; kd_S9_ * S9_
-            kd_S9_ = 2.4734
-            S6_ -> ; kd_S6_ * S6_
-            kd_S6_ = 0.3686
-            S10_ -> ; kd_S10_ * S10_
-            kd_S10_ = 3.6168
+        -> $S1_; k1
+        S2_ -> 2 S4_ + 2 S5_ + S5_ + 3 S3_; k2 * S2_
+        S1_ -> 2 S5_ + 2 S3_; k3 * S1_
+        S3_ -> S4_ + 2 S3_; k4 * S3_
+        S1_ -> 3 S5_ + 3 S5_ + S3_ + S4_ + 2 S3_; k5 * S1_
+        S3_ -> 3 S4_ + 2 S4_ + S3_ + 3 S4_; k6 * S3_
+        S3_ -> S5_ + 2 S4_ + S5_ + 2 S4_; k7 * S3_
+        S2_ -> 2 S3_; k8 * S2_
+        S5_ -> 3 S4_; k9 * S5_
+        S2_ -> 2 S5_ + 2 S5_ + 2 S5_ + 3 S5_; k10 * S2_
+        # Rate constants
+        k1 = 1
+        k2 = 0.2631
+        k3 = 0.8447
+        k4 = 0.9716
+        k5 = 0.1637
+        k6 = 0.8069
+        k7 = 0.5813
+        k8 = 0.4093
+        k9 = 0.6556
+        k10 = 0.3726
+        # Species initialization
+        S1_ = 1  # Input boundary species
+        S2_ = 0
+        S3_ = 0
+        S4_ = 0
+        S5_ = 0
+        # Degradation reactions
+        S4_ -> ; kd_1 * S4_
+        kd_1 = 13.4695
+        S5_ -> ; kd_2 * S5_
+        kd_2 = 5.1147
+        S3_ -> ; kd_3 * S3_
+        kd_3 = 2.1980
         """
-        analyzer = SISOAnalyzer(model)
+        model1 = """
+        species S1_, S2_, S3_, S4_, S5_
+        -> $S1_; k1
+        S1_ -> S3_; k2 * S1_
+        S3_ -> 3 S3_; k4 * S3_
+        # Rate constants
+        k1 = 1
+        k2 = 0.2631
+        k3 = 0.8447
+        k4 = 0.9716
+        k5 = 0.1637
+        k6 = 0.8069
+        k7 = 0.5813
+        k8 = 0.4093
+        k9 = 0.6556
+        k10 = 0.3726
+        # Species initialization
+        S1_ = 1  # Input boundary species
+        S2_ = 0
+        S3_ = 0
+        S4_ = 0
+        S5_ = 0
+        # Degradation reactions
+        S4_ -> ; kd_1 * S4_
+        kd_1 = 13.4695
+        S5_ -> ; kd_2 * S5_
+        kd_2 = 5.1147
+        S3_ -> ; kd_3 * S3_
+        kd_3 = 2.1980
+        """
+
+        model = """
+        -> $S1_; k1
+        S4_ -> 2 S3_ + 3 S5_ + S3_; k2 * S4_
+        S1_ -> S4_ + S5_; k3 * S1_
+        S5_ -> 3 S4_ + 2 S4_ + 2 S5_ + 3 S3_ + 3 S4_; k4 * S5_
+        S1_ -> 3 S3_ + 3 S3_ + S3_ + 2 S5_; k5 * S1_
+        S2_ -> S5_ + 2 S3_ + S4_ + 3 S4_ + 3 S4_; k6 * S2_
+        S1_ -> 2 S5_ + S5_ + 2 S4_ + 3 S3_ + S3_; k7 * S1_
+        S5_ -> 3 S4_ + 2 S3_ + S4_; k8 * S5_
+        S2_ -> S3_ + 2 S4_ + 3 S3_; k9 * S2_
+        S4_ -> 2 S4_; k10 * S4_
+
+        # Rate constants
+        k1 = 0.2175
+        k2 = 0.1769
+        k3 = 0.4090
+        k4 = 0.6329
+        k5 = 0.9204
+        k6 = 0.2265
+        k7 = 0.8298
+        k8 = 0.5267
+        k9 = 0.2583
+        k10 = 0.5946
+
+        # Species initialization
+        S1_ = 1  # Input boundary species
+        S2_ = 0
+        S3_ = 0
+        S4_ = 0
+        S5_ = 0
+
+
+        # Degradation reactions
+        S4_ -> ; kd_0 * S4_
+        kd_0 = 10.6588
+        S3_ -> ; kd_1 * S3_
+        kd_1 = 5.4659
+        S5_ -> ; kd_2 * S5_
+        kd_2 = 0.9497
+        """
+        analyzer = SISOAnalyzer(model, output_name="S3_")
+        transfer_function = analyzer.makeTransferFunction()
+        self.assertIsNotNone(transfer_function)
+        import pdb; pdb.set_trace()
+        if IS_PLOT:
+            analyzer.plotTransferFunctionValidation()
 
     def testBug2(self):
         if IGNORE_TEST:
@@ -253,7 +350,6 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         model = """
         model random_crn()
 
-        -> $S1_; k1
         S5_ -> 2 S4_ + 3 S4_ + S4_ + 2 S4_ + 3 S4_; k2 * S5_
         S1_ -> 3 S4_ + 2 S5_ + 3 S5_ + S3_ + S3_; k3 * S1_
         S2_ -> 3 S4_ + S3_ + 2 S3_ + S4_ + 3 S5_; k4 * S2_
@@ -279,7 +375,7 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         k10 = 0.1057
 
         # Species initialization
-        S1_ = 1  # Input boundary species
+        $S1_ = 1  # Input boundary species
         S2_ = 0
         S3_ = 0
         S4_ = 0
@@ -303,6 +399,55 @@ class TestMakeSequentialAntimony(unittest.TestCase):
         #tf1 = analyzer.transfer_function_expr
         tf1 = analyzer.makeTransferFunction()
         self.assertGreater(tf1.num[-1]/tf1.den[-1], 0) # type: ignore
+
+    def testBug3(self):
+        #if IGNORE_TEST:
+        #    return
+        model = """
+        species S1_;
+
+        S3_ -> S5_ + 2 S3_ + 3 S5_ + 3 S4_ + 3 S5_; k2 * S3_
+        S5_ -> 3 S4_ + 3 S3_ + 3 S5_ + 3 S3_ + S3_; k3 * S5_
+        S1_ -> S4_ + 2 S5_ + 2 S3_; k4 * S1_
+        S5_ -> S3_ + 2 S5_; k5 * S5_
+        S2_ -> 3 S4_ + 2 S3_ + 3 S4_ + 3 S4_ + 3 S5_; k6 * S2_
+        S2_ -> 3 S3_; k7 * S2_
+        S1_ -> 3 S4_ + S4_ + 2 S4_; k8 * S1_
+        S2_ -> S5_ + 2 S4_ + S4_ + 2 S3_ + 3 S5_; k9 * S2_
+        S5_ -> 3 S3_ + S3_ + 3 S5_; k10 * S5_
+
+        # Rate constants
+        k2 = 0.8954
+        k3 = 0.5287
+        k4 = 0.9260
+        k5 = 0.5231
+        k6 = 0.3714
+        k7 = 0.4442
+        k8 = 0.2517
+        k9 = 0.7125
+        k10 = 0.8282
+
+        # Species initialization
+        $S1_ = 1  # Input boundary species
+        S2_ = 0
+        S3_ = 0
+        S4_ = 0
+        S5_ = 0
+
+
+        # Degradation reactions
+        S3_ -> ; kd_0 * S3_
+        kd_0 = 13.1259
+        S5_ -> ; kd_1 * S5_
+        kd_1 = 14.8158
+        S4_ -> ; kd_2 * S4_
+        kd_2 = 10.7276
+        """
+        analyzer = SISOAnalyzer(model, output_name="S5_")
+        tf1 = analyzer.makeTransferFunction()
+        self.assertGreater(tf1.num[-1]/tf1.den[-1], 0) # type: ignore
+        if IS_PLOT:
+            analyzer.plotTransferFunctionValidation()
 
 
 

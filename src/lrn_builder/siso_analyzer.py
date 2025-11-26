@@ -10,6 +10,7 @@ Conventions for Antimony models.
 from src.lrn_builder.symbolic_jacobian_maker import SymbolicJacobianMaker
 
 from collections import namedtuple
+import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import pandas as pd # type: ignore
 from scipy import signal  # type: ignore
@@ -86,6 +87,7 @@ class SISOAnalyzer(object):
                             columns=sorted_species_names)
         # Other attributes
         self.jacobian_smat = maker.jacobian_smat
+        self.b_smat = maker.b_smat
         self.kinetic_constant_dct = maker.kinetic_constant_dct
         self.species_names = maker.species_names
         self.num_species = len(self.species_names)
@@ -109,6 +111,7 @@ class SISOAnalyzer(object):
         else:
             output_name = proposed_output_name
         if output_name not in candidate_names:
+            import pdb; pdb.set_trace()
             raise ValueError(f"Output species {self.output_name} not found in model species: {candidate_names}")
         #
         return output_name
@@ -121,10 +124,15 @@ class SISOAnalyzer(object):
             # Construct the transfer function expression
             input_index = self.species_names.index(self.input_name)
             s = sp.Symbol("s")
-            B = sp.Matrix(np.zeros((self.num_species, self.num_species)))
-            B[input_index, input_index] = 1
+            B = sp.eye(self.jacobian_smat.rows)
             I = sp.eye(self.jacobian_smat.rows)
-            self._transfer_function_smat = (s*I - self.jacobian_smat).inv() * B
+            A_smat = self.jacobian_smat
+            b_smat = sp.Matrix.zeros(self.jacobian_smat.rows, 1)
+            b_smat[input_index] = 1
+            b_smat += self.b_smat
+            A_smat[input_index, :] = sp.Matrix.zeros(1, self.jacobian_smat.cols)
+            # Multiply the step response by s to get the transfer function
+            self._transfer_function_smat = sp.simplify(s*((s*I - A_smat).inv() * B * b_smat))
         return self._transfer_function_smat
     
     @property
@@ -219,18 +227,17 @@ class SISOAnalyzer(object):
         """
         kinetic_constant_dct = dict(self.kinetic_constant_dct)
         kinetic_constant_dct.update(kwargs)
-        transfer_function_expr = self.transfer_function_expr.subs(kinetic_constant_dct)
+        # Substitute kinetic constants into symbolic transfer function expression
+        transfer_function_smat = sp.simplify(self.transfer_function_expr.subs(kinetic_constant_dct))
         # All free symbols except for s should be removed. Now convert to transfer function
-        free_syms = transfer_function_expr.free_symbols
+        free_syms = transfer_function_smat.free_symbols
         if len(free_syms) == 0:
-            return signal.TransferFunction([float(transfer_function_expr)], [1])
+            return signal.TransferFunction([float(transfer_function_smat)], [1])
         elif len(free_syms) > 1:
             raise ValueError(f"Expression contains multiple symbols: {free_syms}. "
                             "Only single-variable rational functions are supported.")
         s = free_syms.pop()
-        # Simplify and get numerator and denominator
-        transfer_function_expr = sp.simplify(transfer_function_expr)
-        numer, denom = sp.fraction(transfer_function_expr)
+        numer, denom = sp.fraction(transfer_function_smat)
         # Convert to polynomials
         numer_poly = sp.Poly(numer, s)
         denom_poly = sp.Poly(denom, s)
@@ -241,3 +248,27 @@ class SISOAnalyzer(object):
         self.transfer_function = signal.TransferFunction(numer_coeffs, denom_coeffs) 
         #
         return self.transfer_function
+
+    def plotTransferFunctionValidation(self, step_size: float = 1.0) -> None:
+        """
+        Plots the simulated and transfer function predicted outputs.
+
+        Args:
+            step_size (float): The magnitude of the step input.
+        """
+        tf = self.makeTransferFunction()
+        rr = te.loada(self.original_antimony_str)
+        data = rr.simulate(0, 10, 100)
+        times = data[:, 0]
+        _, predicted_y = signal.step(tf, T=times)
+        true_y = data[f"[{self.output_name}]"]
+        # Plot the step response comparison
+        plt.figure()
+        plt.scatter(true_y, predicted_y*step_size)
+        plt.plot([0, max(true_y)], [0, max(true_y)], 'r--', label="Ideal")
+        plt.title(f"Predicted vs. Actual Step Response for {self.output_name}")
+        plt.xlabel("Actual")
+        plt.ylabel("Predicted")
+        plt.grid()
+        plt.legend(["Comparison", "Ideal"])
+        plt.show()

@@ -3,14 +3,16 @@
 """
 Characteristics of the generated CRN.
 1. Behaves as a linear system of ODEs.
-2. Each reaction has one reactant and one or more products.
+2. Each reaction has zero or one reactant and zero or more products.
 3. Kinetic constants are randomly assigned within specified bounds.
 4. Stoichiometry of products is randomly assigned within specified bounds.
 5. The first reaction has no reactant (i.e., it is a source reaction).
 6. Subsequent reactions select reactants from existing species to ensure connectivity.
-7. Species are named sequentially (S1, S2, S3, ...).
+7. Species are named sequentially (S1_, S2_, S3_, ...).
 8. Kinetic constants are named sequentially (k1, k2, k3,
-9. Species S1 is an input boundary.
+9. Species S1 is an input boundary with the kinetic constant k1 = 1.
+10. The system is assured to be stable by adding degradation reactions if necessary.
+11. The system is assured to be non-trivial by ensuring that S1 is a reactant in at least one reaction.
 """
 
 import random
@@ -34,6 +36,7 @@ def makeLtiCrn(
     """
     Generate a random linear time-invariant (LTI) chemical reaction network
     in Antimony language.
+    S1 is the boundary species and its initial value is 1.
     
     Parameters:
     -----------
@@ -85,7 +88,7 @@ def makeLtiCrn(
     # Track existing species and rate constants
     rate_constants = []
     
-    # Reaction 1: No reactant, S1 is product
+    """ # S1 is a boundary species and k1 is its initial value
     k1 = np.random.uniform(kinetic_constant_bounds[0], kinetic_constant_bounds[1])
     rate_constants.append((f"{rate_constant_prefix}1", k1))
     if is_input_boundary:
@@ -93,6 +96,8 @@ def makeLtiCrn(
     else:
         prefix = ""
     antimony_lines.append(f"  -> {prefix}{input_species_name}; {rate_constant_prefix}1")
+    """
+    antimony_lines.append(f"  species {input_species_name};\n")
     existing_species = [makeSpeciesName(n) for n in range(1, num_species + 1)]
     candidate_product_species = existing_species[2:]
     
@@ -142,7 +147,11 @@ def makeLtiCrn(
     antimony_lines.append("\n  # Species initialization")
     for species in sorted(existing_species, key=lambda x: extractSpeciesNumber(x)):
         if species == input_species_name:
-            antimony_lines.append(f"  {species} = 1  # Input boundary species")
+            if is_input_boundary:
+                prefix = "$"
+            else:
+                prefix = ""
+            antimony_lines.append(f"  {prefix}{species} = 1  # Input boundary species")
         else:
             antimony_lines.append(f"  {species} = 0")
     
@@ -184,5 +193,5 @@ def makeLtiCrn(
     if np.any(eigenvalues.real > 0):
         import pdb; pdb.set_trace()
         pass
-    
+
     return antimony_str

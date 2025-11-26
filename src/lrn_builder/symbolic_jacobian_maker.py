@@ -44,7 +44,7 @@ class SymbolicJacobianMaker(object):
         self.kinetic_constant_dct: dict = self._makeKineticConstantDct()
         self.species_names: list = self._makeSpeciesNames()
         self.num_species: int = len(self.species_names)
-        self.jacobian_smat, self.b_mat = self._makeSymbolicJacobian()
+        self.jacobian_smat, self.b_smat = self._makeSymbolicJacobian()
 
     def _getSpeciesIndex(self, species_name: str)->int:
         # Get the index of a species in the species_names list
@@ -82,9 +82,12 @@ class SymbolicJacobianMaker(object):
     def _makeKineticConstantDct(self)->Dict[str, float]:
         kinetic_constant_dct = {}
         # Get parameters and create symbols and dictionary
+        species_names = self._makeSpeciesNames()
         for i in range(self.model.getNumParameters()):
             param = self.model.getParameter(i)
             param_id = param.getId()
+            if param_id in species_names:
+                continue
             param_value = param.getValue()
             kinetic_constant_dct[param_id] = param_value
         return kinetic_constant_dct
@@ -218,9 +221,9 @@ class SymbolicJacobianMaker(object):
                 continue
             product_idx = self._getSpeciesIndex(product_id)
             if kinetic_species_name is not None:
-                A_smat[product_idx, kinetic_species_idx] = stoich * kinetic_constant_symbol
+                A_smat[product_idx, kinetic_species_idx] += stoich * kinetic_constant_symbol
             else:
-                b_smat[product_idx] = stoich * kinetic_constant_symbol
+                b_smat[product_idx] += stoich * kinetic_constant_symbol
         #
         product_names = [p for p, s in product_stoichiometry_dct.items() if s > 0]
         return ReactionSymbolicJacobian(A_smat=A_smat, b_smat=b_smat, reactant_name=reactant_name,
