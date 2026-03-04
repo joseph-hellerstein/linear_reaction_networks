@@ -11,6 +11,8 @@ mypy
 numpy
 pandas
 pandas-stubs
+pypdf
+pymupdf
 pylint
 nose2
 sbmlnetwork

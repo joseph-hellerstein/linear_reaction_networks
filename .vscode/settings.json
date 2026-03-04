@@ -1,5 +1,27 @@
   {
   "filePath": "/Users/jlheller/home/Technical/repos/linear_reaction_networks/.vscode/settings.json",
   "newString": "{\n  \"files.exclude\": {\n    \"lrn\": true\n  },\n  \"search.exclude\": {\n    \"lrn\": true\n  },\n  \"files.watcherExclude\": {\n    \"lrn/**\": true\n  },\n  \"python.analysis.exclude\": [\n    \"**/lrn/**\"\n  ],\n  \"python.analysis.ignore\": [\n    \"**/lrn/**\"\n  ]\n}",
-  "oldString": "{\n  \"files.exclude\": {\n    \"lrn\": true\n  },\n  \"search.exclude\": {\n    \"lrn\": true\n  },\n  \"files.watcherExclude\": {\n    \"lrn/**\": true\n  },\n  \"python.analysis.exclude\": [\n    \"lrn\"\n  ]\n}"
+  "oldString": "{\n  \"files.exclude\": {\n    \"lrn\": true\n  },\n  \"search.exclude\": {\n    \"lrn\": true\n  },\n  \"files.watcherExclude\": {\n    \"lrn/**\": true\n  },\n  \"python.analysis.exclude\": [\n    \"lrn\"\n  ]\n}",
+  "latex-workshop.latex.tools": [
+   {
+        "name": "pdflatex",
+        "command": "pdflatex",
+        "args": ["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "%DOC%"]
+    },
+    {
+        "name": "bibtex",
+        "command": "bibtex",
+        "args": ["%DOCFILE%"]
+    }
+],
+"latex-workshop.latex.recipes": [
+    {
+        "name": "pdflatex -> bibtex -> pdflatex x2",
+        "tools": ["pdflatex", "bibtex", "pdflatex", "pdflatex"]
+    },
+    {
+        "name": "pdflatex",
+        "tools": ["pdflatex"]
+    }
+],
 }
